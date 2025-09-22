@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # Backend Service (Laravel + PHP-FPM)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: my-laravel-backend
+    restart: unless-stopped
+    volumes:
+      - ./backend:/var/www/html
+    # แก้ไข: อ่านค่า environment จากไฟล์ .env ของ Laravel โดยตรง
+    env_file:
+      - ./backend/.env
+    networks:
+      - my_app_network
+    depends_on:
+      - db
+
+  # Frontend Service (React/Vite)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: my-react-frontend
+    restart: unless-stopped
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules # ป้องกันไม่ให้ node_modules ใน container ถูกเขียนทับ
+    ports:
+      - "5173:5173" # สำหรับ Vite Dev Server (Hot Reload)
+    networks:
+      - my_app_network
+
+  # Nginx Service (Reverse Proxy)
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: my-nginx-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend/dist:/app/dist # Frontend files
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - ./backend:/var/www/html # <<< เพิ่มบรรทัดนี้
+    networks:
+      - my_app_network
+    depends_on:
+      - backend
+      - frontend
+
+  # Database Service (PostgreSQL)
+  db:
+    image: postgres:15-alpine
+    container_name: my-postgres-db
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # แก้ไข: อ่านค่า environment จากไฟล์ .env ที่ root ของโปรเจกต์
+    env_file:
+      - ./.env
+    ports:
+      - "${DB_PORT}:5432"
+    networks:
+      - my_app_network
+
+networks:
+  my_app_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
