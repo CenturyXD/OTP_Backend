@@ -1,3 +1,5 @@
+image: docker:latest
+
 stages:
   - build
   - test
@@ -21,9 +23,7 @@ build:
 test:
   stage: test
   script:
-    # ตัวอย่าง: รัน unit test ของ backend (Laravel)
     - docker-compose run --rm backend php artisan test
-    # ตัวอย่าง: รัน unit test ของ frontend (React)
     - docker-compose run --rm frontend npm test -- --watchAll=false
 
 deploy:
