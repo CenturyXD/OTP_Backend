@@ -24,6 +24,7 @@ test:
   stage: test
   script:
     - echo "$BACKEND_ENV" > backend/.env
+    - cat backend/.env
     - docker-compose run --rm backend composer install --no-interaction --prefer-dist --optimize-autoloader
     - docker-compose run --rm backend php artisan test
     - docker-compose run --rm frontend npm install
