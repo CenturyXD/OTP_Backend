@@ -23,6 +23,7 @@ build:
 test:
   stage: test
   script:
+    - set -x
     - echo "$BACKEND_ENV" > backend/.env
     - cat backend/.env
     - docker-compose run --rm backend composer install --no-interaction --prefer-dist --optimize-autoloader
