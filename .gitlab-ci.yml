@@ -1,5 +1,6 @@
 stages:
   - build
+  - test
   - deploy
 
 variables:
@@ -17,7 +18,16 @@ build:
   script:
     - docker-compose build
 
+test:
+  stage: test
+  script:
+    # ตัวอย่าง: รัน unit test ของ backend (Laravel)
+    - docker-compose run --rm backend php artisan test
+    # ตัวอย่าง: รัน unit test ของ frontend (React)
+    - docker-compose run --rm frontend npm test -- --watchAll=false
+
 deploy:
   stage: deploy
   script:
     - docker-compose up -d
+  when: on_success
