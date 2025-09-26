@@ -25,13 +25,13 @@ const LoginPage: React.FC<LoginPageProps> = ({ isDarkMode, onThemeChange }) => {
         setLoading(true);
         messageApi.loading({ content: 'กำลังเข้าสู่ระบบ...', key: 'login' });
         try {
-            const success = await authService.login(username, password);
-            console.log('login result', success);
-            if (success) {
-                messageApi.success({ content: 'เข้าสู่ระบบสำเร็จ!', key: 'login', duration: 2 });
+            const result = await authService.login(username, password);
+            console.log('login result', result);
+            if (result.success) {
+                messageApi.success({ content: result.message || 'เข้าสู่ระบบสำเร็จ!', key: 'login', duration: 2 });
                 navigate('/dashboard');
             } else {
-                messageApi.error({ content: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', key: 'login', duration: 3 });
+                messageApi.error({ content: result.message || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', key: 'login', duration: 3 });
             }
         } catch (error) {
             console.error('login error', error);

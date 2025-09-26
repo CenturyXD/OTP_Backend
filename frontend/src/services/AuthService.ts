@@ -12,12 +12,12 @@ export class AuthService {
         try {
             // เรียก API endpoint /register ที่เราสร้างไว้ใน Laravel
             const response = await this.apiClient.post('/api/register', userData);
-            
+
             // หาก API ตอบกลับมาว่าสำเร็จ
             if (response.success) {
                 return { success: true };
             }
-            
+
             // กรณีที่ไม่คาดคิดที่ success เป็น false แต่ไม่เกิด error
             return { success: false, errors: response.errors || {} };
 
@@ -28,29 +28,22 @@ export class AuthService {
         }
     }
 
-    async login(username: string, password: string): Promise<boolean> {
+    async login(username: string, password: string): Promise<{ success: boolean; message?: string }> {
         try {
-            // เรียก API endpoint /api/login ที่เราจะสร้างใน Laravel
             const response = await this.apiClient.post('/api/login', { username, password });
 
-            // ตรวจสอบว่า API ตอบกลับมาว่าสำเร็จและมี token
             if (response.success && response.access_token) {
-                // ถ้าสำเร็จ, บันทึก token ลงใน Storage
                 TokenStorage.setToken(response.access_token);
-                
-                // บันทึก role ที่ได้รับมาโดยตรงลงใน localStorage
                 localStorage.setItem('userRole', response.role);
-
-                return true; // คืนค่า true เพื่อบอก LoginPage ว่าสำเร็จ
+                return { success: true, message: response.message  };
             }
 
-            // กรณีที่ API ตอบกลับมาว่า success: false แต่ไม่เกิด error
-            return false;
+            // คืน message จาก backend ด้วย
+            return { success: false, message: response.message  };
 
-        } catch (error) {
-            // ถ้าเกิด Network Error หรือ API ตอบกลับมาเป็น status 4xx, 5xx
+        } catch (error: any) {
             console.error('Login failed:', error);
-            return false; // คืนค่า false เพื่อบอก LoginPage ว่าล้มเหลว
+            return { success: false, message: error?.message };
         }
     }
 

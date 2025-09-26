@@ -164,7 +164,15 @@ export class ApiClient {
     public updateBrkIp(id: number, data: BrkIpData): Promise<BrkIpData> {
         return this.put(`/api/brk-ips/${id}`, data);
     }
+    
+    // --- User Specific Methods ---
+    public getUsers(page: number = 1, per_page: number = 10, search: string = ''): Promise<PaginatedResponse<any>> {
+        return this.get('/api/admin/users', { page, per_page, search });
+    }
 
-    // --- Pool 196 IP Specific Methods ---
+    public updateUser(id: number, data: any): Promise<any> {
+        return this.put(`/api/admin/users/${id}`, data);
+    }
+
 
 }

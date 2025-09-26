@@ -1,128 +1,102 @@
 import React, { useState, useEffect } from 'react';
 import {
-    Table,
-    Button,
-    Modal,
-    Form,
-    Input,
-    Select,
-    Space,
-    Popconfirm,
-    message,
-    Typography,
-    Tag
+    Card, Col, Row, Statistic, Table, Typography, Tag, Space, Button, App, Input, Modal, Form, Select
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import { ApiClient } from '../../api/ApiClient'; // 1. เปิดใช้งาน ApiClient
+import { EditOutlined } from '@ant-design/icons';
+import { UserService } from '../../services/UserService';
+import { useDebounce } from '../../hooks/useDebounce';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
+const { Search } = Input;
 const { Option } = Select;
 
-// กำหนด Type สำหรับข้อมูล User
 interface User {
     id: number;
     name: string;
     username: string;
     role: 'admin' | 'user' | 'superadmin';
+    status: 'active' | 'deactive';
     created_at: string;
 }
 
-// 2. ลบข้อมูลจำลอง (Mock Data) ออกไป
-
 const UserManagementPage: React.FC = () => {
-    const [users, setUsers] = useState<User[]>([]); // 3. ตั้งค่า State เริ่มต้นเป็น Array ว่าง
-    const [loading, setLoading] = useState(true); // 4. ตั้งค่า loading เป็น true เพื่อรอ API
+    const { notification } = App.useApp();
+    const [users, setUsers] = useState<User[]>([]);
+    const [loading, setLoading] = useState(true);
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [form] = Form.useForm();
-    const apiClient = new ApiClient(); // 5. สร้าง instance ของ ApiClient
+    const [searchTerm, setSearchTerm] = useState('');
+    const debouncedSearchTerm = useDebounce(searchTerm, 500);
+    const [summary, setSummary] = useState({ total: 0, admin: 0, user: 0, superadmin: 0 });
+    const [pagination, setPagination] = useState({ current: 1, pageSize: 10, total: 0 });
 
-    // 6. แก้ไขฟังก์ชัน fetchUsers ให้เรียก API จริง
-    const fetchUsers = async () => {
+    // Fetch users with pagination and search
+    const fetchUsers = async (page: number, pageSize: number, search: string) => {
         setLoading(true);
         try {
-            // Laravel pagination ส่งข้อมูลมาใน key 'data'
-            const response = await apiClient.get('/api/admin/users');
-            setUsers(response.data);
+            const response = await UserService.fetchUsers(search, page, pageSize);
+            setUsers(response.data.data || response.data);
+            setPagination({
+                current: response.data.current_page,
+                pageSize: response.data.per_page,
+                total: response.data.total,
+            });
+            if (search === '') {
+                setSummary({
+                    total: response.data.total,
+                    admin: (response.data.data || response.data).filter((u: User) => u.role === 'admin').length,
+                    user: (response.data.data || response.data).filter((u: User) => u.role === 'user').length,
+                    superadmin: (response.data.data || response.data).filter((u: User) => u.role === 'superadmin').length,
+                });
+            }
         } catch (error) {
-            // Error 403 จะถูกจัดการโดย Interceptor ใน ApiClient แล้ว
-            // ที่นี่จะแสดง error กรณีอื่นๆ
-            message.error('ไม่สามารถดึงข้อมูลผู้ใช้ได้');
+            notification.error({ message: 'Error', description: 'ไม่สามารถดึงข้อมูลผู้ใช้ได้' });
         } finally {
             setLoading(false);
         }
     };
 
-    // 7. เปิดใช้งาน useEffect เพื่อให้ดึงข้อมูลเมื่อ Component โหลด
+    // ดึงข้อมูลเมื่อ search เปลี่ยน (debounced)
     useEffect(() => {
-        fetchUsers();
-    }, []);
+        fetchUsers(1, pagination.pageSize, debouncedSearchTerm);
+        // eslint-disable-next-line
+    }, [debouncedSearchTerm, pagination.pageSize]);
 
-    // --- Handlers สำหรับจัดการ Modal และ Form ---
-    const showAddModal = () => {
-        setEditingUser(null);
-        form.resetFields();
-        setIsModalVisible(true);
-    };
-
+    // Modal handlers
     const showEditModal = (user: User) => {
         setEditingUser(user);
         form.setFieldsValue({
             ...user,
-            password: '', // ไม่แสดงรหัสผ่านเดิม
+            status: user.status === 'active' ? 'active' : 'deactive',
         });
         setIsModalVisible(true);
     };
+    const handleCancel = () => setIsModalVisible(false);
 
-    const handleCancel = () => {
-        setIsModalVisible(false);
-    };
-
-    // 8. แก้ไข onFinish ให้เรียก API จริง
+    // CRUD
     const onFinish = async (values: any) => {
-        // ถ้าไม่มีการกรอกรหัสผ่าน ให้ลบ key ออกไปเพื่อไม่ให้ส่งไปอัปเดต
-        if (!values.password) {
-            delete values.password;
-            delete values.password_confirmation;
-        }
-
+        setLoading(true);
         try {
             if (editingUser) {
-                // --- โหมดแก้ไข ---
-                await apiClient.put(`/api/admin/users/${editingUser.id}`, values);
-                message.success('อัปเดตข้อมูลผู้ใช้สำเร็จ');
-            } else {
-                // --- โหมดเพิ่มใหม่ ---
-                await apiClient.post('/api/admin/users', values);
-                message.success('เพิ่มผู้ใช้ใหม่สำเร็จ');
+                await UserService.updateUser(editingUser.id, { status: values.status });
+                notification.success({ message: 'Success', description: 'อัปเดตสถานะผู้ใช้สำเร็จ' });
             }
             setIsModalVisible(false);
-            fetchUsers(); // โหลดข้อมูลใหม่หลังบันทึกสำเร็จ
+            fetchUsers(pagination.current, pagination.pageSize, searchTerm);
         } catch (error: any) {
-            // จัดการ Validation Error จาก Laravel
             if (error && error.errors) {
-                const errorMessages = Object.values(error.errors).flat().join('\n');
-                message.error(errorMessages);
+                notification.error({ message: 'Validation Error', description: Object.values(error.errors).flat().join('\n') });
             } else {
-                message.error('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+                notification.error({ message: 'Error', description: 'เกิดข้อผิดพลาดในการบันทึกข้อมูล' });
             }
+        } finally {
+            setLoading(false);
         }
     };
 
-    // 9. แก้ไข handleDelete ให้เรียก API จริง
-    const handleDelete = async (userId: number) => {
-        try {
-            await apiClient.delete(`/api/admin/users/${userId}`);
-            message.success('ลบผู้ใช้สำเร็จ');
-            fetchUsers(); // โหลดข้อมูลใหม่หลังลบสำเร็จ
-        } catch (error) {
-            message.error('ไม่สามารถลบผู้ใช้ได้');
-        }
-    };
-
-    // --- กำหนดคอลัมน์สำหรับตาราง (เหมือนเดิม) ---
+    // Table columns
     const columns = [
-        { title: 'ID', dataIndex: 'id', key: 'id', sorter: (a: User, b: User) => a.id - b.id },
         { title: 'Name', dataIndex: 'name', key: 'name' },
         { title: 'Username', dataIndex: 'username', key: 'username' },
         {
@@ -138,6 +112,16 @@ const UserManagementPage: React.FC = () => {
             },
         },
         {
+            title: 'Status',
+            dataIndex: 'status',
+            key: 'status',
+            render: (status: string) => (
+                <Tag color={status === 'active' ? 'green' : 'volcano'}>
+                    {status === 'active' ? 'ACTIVE' : 'DEACTIVE'}
+                </Tag>
+            ),
+        },
+        {
             title: 'Created At',
             dataIndex: 'created_at',
             key: 'created_at',
@@ -148,94 +132,100 @@ const UserManagementPage: React.FC = () => {
             key: 'actions',
             render: (_: any, record: User) => (
                 <Space size="middle">
-                    <Button icon={<EditOutlined />} onClick={() => showEditModal(record)}>
-                        Edit
-                    </Button>
-                    <Popconfirm
-                        title="คุณแน่ใจหรือไม่ที่จะลบผู้ใช้นี้?"
-                        onConfirm={() => handleDelete(record.id)}
-                        okText="Yes"
-                        cancelText="No"
-                    >
-                        <Button danger icon={<DeleteOutlined />}>
-                            Delete
-                        </Button>
-                    </Popconfirm>
+                    <Button icon={<EditOutlined />} onClick={() => showEditModal(record)} />
                 </Space>
             ),
         },
     ];
 
+    // Table change handler (pagination, filter, sort)
+    const handleTableChange = (newPagination: any) => {
+        fetchUsers(newPagination.current, newPagination.pageSize, searchTerm);
+    };
+
+    // Search handler
+    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setSearchTerm(e.target.value);
+    };
+
     return (
-        <div>
+        <>
             <Title level={2}>User Management</Title>
-            <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={showAddModal}
-                style={{ marginBottom: 16 }}
+            <Text type="secondary">Overview of all users in the system.</Text>
+            <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
+                <Col xs={12} sm={6}><Card><Statistic title="Total Users" value={pagination.total} /></Card></Col>
+                <Col xs={12} sm={6}><Card><Statistic title="Admin" value={summary.admin} valueStyle={{ color: '#1677ff' }} /></Card></Col>
+                <Col xs={12} sm={6}><Card><Statistic title="User" value={summary.user} valueStyle={{ color: '#3f8600' }} /></Card></Col>
+                <Col xs={12} sm={6}><Card><Statistic title="Superadmin" value={summary.superadmin} valueStyle={{ color: '#cf1322' }} /></Card></Col>
+            </Row>
+
+            <Card
+                title="User Table"
+                style={{ marginTop: 24 }}
+                extra={
+                    <Space wrap>
+                        <Search
+                            placeholder="Search user..."
+                            value={searchTerm}
+                            onChange={handleSearchChange}
+                            style={{ width: 200 }}
+                        />
+                    </Space>
+                }
             >
-                Add User
-            </Button>
-            <Table
-                columns={columns}
-                dataSource={users}
-                rowKey="id"
-                loading={loading}
-                bordered
-            />
+                <Table
+                    columns={columns}
+                    dataSource={users}
+                    rowKey="id"
+                    loading={loading}
+                    bordered
+                    pagination={{
+                        ...pagination,
+                        showSizeChanger: true,
+                        pageSizeOptions: ['10', '15', '20', '50', '100'],
+                        showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`,
+                    }}
+                    onChange={handleTableChange}
+                />
+            </Card>
 
             <Modal
-                title={editingUser ? 'Edit User' : 'Add New User'}
+                title="Edit User Status"
                 open={isModalVisible}
                 onCancel={handleCancel}
                 footer={null}
             >
-                <Form form={form} layout="vertical" onFinish={onFinish} style={{ marginTop: 24 }}>
-                    <Form.Item name="name" label="Name" rules={[{ required: true }]}>
-                        <Input />
-                    </Form.Item>
-                    <Form.Item name="username" label="Username" rules={[{ required: true }]}>
-                        <Input />
-                    </Form.Item>
-                    <Form.Item name="role" label="Role" rules={[{ required: true }]}>
-                        <Select>
-                            <Option value="admin">Admin</Option>
-                            <Option value="user">User</Option>
-                        </Select>
-                    </Form.Item>
-                    <Form.Item
-                        name="password"
-                        label={editingUser ? 'New Password (Optional)' : 'Password'}
-                        rules={[{ required: !editingUser }]}
-                    >
-                        <Input.Password />
-                    </Form.Item>
-                    <Form.Item
-                        name="password_confirmation"
-                        label="Confirm Password"
-                        dependencies={['password']}
-                        rules={[
-                            ({ getFieldValue }) => ({
-                                validator(_, value) {
-                                    if (!getFieldValue('password') || getFieldValue('password') === value) {
-                                        return Promise.resolve();
-                                    }
-                                    return Promise.reject(new Error('The two passwords do not match!'));
-                                },
-                            }),
-                        ]}
-                    >
-                        <Input.Password />
-                    </Form.Item>
-                    <Form.Item>
-                        <Button type="primary" htmlType="submit" loading={loading}>
-                            {editingUser ? 'Update' : 'Create'}
-                        </Button>
-                    </Form.Item>
+                <Form
+                    form={form}
+                    layout="vertical"
+                    onFinish={onFinish}
+                    style={{ marginTop: 24 }}
+                    initialValues={editingUser ? { status: editingUser.status } : {}}
+                >
+                    {editingUser && (
+                        <>
+                            <Form.Item name="name" label="Name">
+                                <Input disabled />
+                            </Form.Item>
+                            <Form.Item name="username" label="Username">
+                                <Input disabled />
+                            </Form.Item>
+                            <Form.Item name="status" label="Status" rules={[{ required: true }]}>
+                                <Select>
+                                    <Option value="active">Active</Option>
+                                    <Option value="deactive">Deactive</Option>
+                                </Select>
+                            </Form.Item>
+                            <Form.Item>
+                                <Button type="primary" htmlType="submit" loading={loading}>
+                                    Update Status
+                                </Button>
+                            </Form.Item>
+                        </>
+                    )}
                 </Form>
             </Modal>
-        </div>
+        </>
     );
 };
 

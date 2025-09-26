@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class UserManagementController extends Controller
 {
@@ -14,13 +15,24 @@ class UserManagementController extends Controller
      * แสดงรายชื่อผู้ใช้ทั้งหมด
      * GET /api/admin/users
      */
-    public function index()
+    public function index(Request $request)
     {
-        // ดึงข้อมูลผู้ใช้ทั้งหมด ยกเว้น superadmin คนปัจจุบัน
-        // และเรียงตาม ID ล่าสุด พร้อมแบ่งหน้า
-        $users = User::where('id', '!=', auth()->id())
-                     ->latest()
-                     ->paginate(10);
+        $perPage = $request->query('per_page', 5);
+
+        $searchTerm = $request->query('search');
+
+        $query = User::where('id', '!=', auth()->id());
+
+        if ($searchTerm) {
+            $query->where(function ($q) use ($searchTerm) {
+                $q->where('name', 'like', "%{$searchTerm}%")
+                    ->orWhere('username', 'like', "%{$searchTerm}%")
+                    ->orWhere('role', 'like', "%{$searchTerm}%")
+                    ->orWhere('status', 'like', "%{$searchTerm}%");
+            });
+        }
+
+        $users = $query->latest()->paginate($perPage)->withQueryString();
 
         return response()->json($users);
     }
@@ -66,27 +78,32 @@ class UserManagementController extends Controller
      */
     public function update(Request $request, User $user)
     {
-        $validatedData = $request->validate([
-            'name' => 'required|string|max:255',
-            'username' => ['required', 'string', 'max:255', Rule::unique('users')->ignore($user->id)],
-            'role' => ['required', Rule::in(['admin', 'user'])],
-            'password' => 'nullable|string|min:8|confirmed', // ทำให้ password ไม่บังคับเปลี่ยน
-        ]);
+        try {
+            $validatedData = $request->validate([
+                'status' => ['sometimes', Rule::in(['active', 'deactive'])],
+            ]);
 
-        $user->name = $validatedData['name'];
-        $user->username = $validatedData['username'];
-        $user->role = $validatedData['role'];
+            if (isset($validatedData['status'])) {
+                $user->status = $validatedData['status'];
+            }
 
-        if (!empty($validatedData['password'])) {
-            $user->password = Hash::make($validatedData['password']);
+            $user->save();
+
+            return response()->json([
+                'message' => 'User updated successfully.',
+                'user' => $user
+            ]);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'message' => 'Validation error.',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'An error occurred.',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        $user->save();
-
-        return response()->json([
-            'message' => 'User updated successfully.',
-            'user' => $user
-        ]);
     }
 
     /**

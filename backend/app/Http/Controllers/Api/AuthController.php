@@ -23,6 +23,7 @@ class AuthController extends Controller
                 'username' => $request->username,
                 'email' => $request->email,
                 'password' => Hash::make($request->password),
+                'status' => 'deactive',
             ]);
 
             DB::commit();
@@ -53,7 +54,15 @@ class AuthController extends Controller
             ], 401);
         }
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        // เช็คสถานะ active
+        if ($user->status !== 'active') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Your account is not active. Please contact the administrator.'
+            ], 401);
+        }
+
+        $token = $user->createToken('auth_token', [], now()->addHour())->plainTextToken;
 
         return response()->json([
             'success' => true,

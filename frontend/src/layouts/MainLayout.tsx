@@ -55,16 +55,16 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, onThemeChange }) =>
             icon: <DashboardOutlined />,
             label: <Link to="/dashboard">Dashboard</Link>,
         },
-        {
-            key: '2',
-            icon: <TableOutlined />,
-            label: <Link to="/tables">Tables</Link>,
-        },
-        {
-            key: '3',
-            icon: <UserOutlined />,
-            label: <Link to="/profile">Profile</Link>,
-        },
+        // {
+        //     key: '2',
+        //     icon: <TableOutlined />,
+        //     label: <Link to="/tables">Tables</Link>,
+        // },
+        // {
+        //     key: '3',
+        //     icon: <UserOutlined />,
+        //     label: <Link to="/profile">Profile</Link>,
+        // },
         {
             key: 'sub1',
             icon: <ToolOutlined />,

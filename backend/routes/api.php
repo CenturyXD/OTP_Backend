@@ -20,7 +20,8 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // --- Super Admin Routes ---
-    Route::middleware('role:superadmin')->prefix('admin')->group(function () {
+
+    Route::middleware(['auth:sanctum', 'role:superadmin'])->prefix('admin')->group(function () {
         Route::apiResource('users', UserManagementController::class);
     });
 
