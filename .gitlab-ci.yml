@@ -23,6 +23,7 @@ build:
 test:
   stage: test
   script:
+    - echo "$BACKEND_ENV" > backend/.env
     - docker-compose run --rm backend php artisan test
     - docker-compose run --rm frontend npm test -- --watchAll=false
 
