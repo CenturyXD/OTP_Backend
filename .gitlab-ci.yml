@@ -22,7 +22,6 @@ build:
 
 test:
   stage: test
-  image: laravelsail/php83-composer:latest
   before_script:
     - cp backend/.env.example backend/.env
     - cd backend
