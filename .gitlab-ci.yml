@@ -25,10 +25,12 @@ test:
   image: laravelsail/php83-composer:latest
   before_script:
     - cp backend/.env.example backend/.env
+    - cd backend
     - composer install --no-interaction --prefer-dist
     - php artisan key:generate
     - php artisan migrate --force
   script:
+    - cd backend
     - php artisan test --parallel
 
 deploy:
