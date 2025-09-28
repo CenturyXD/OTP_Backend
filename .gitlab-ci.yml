@@ -22,5 +22,6 @@ build:
 deploy:
   stage: deploy
   script:
+    - cp backend/.env.example backend/.env
     - docker-compose up -d
   when: on_success
