@@ -20,13 +20,11 @@ build:
   script:
     - docker-compose build
 
-
-
 test:
   stage: test
   image: laravelsail/php83-composer:latest
   before_script:
-    - cp .env.example .env
+    - cp backend/.env.example backend/.env
     - composer install --no-interaction --prefer-dist
     - php artisan key:generate
     - php artisan migrate --force
