@@ -41,7 +41,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, onThemeChange }) =>
 
     const handleLogout = () => {
         authService.logout();
-        messageApi.success('ออกจากระบบสำเร็จs');
+        messageApi.success('ออกจากระบบสำเร็จ');
         navigate('/login');
     };
 
