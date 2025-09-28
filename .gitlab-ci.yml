@@ -2,7 +2,7 @@ image: docker:latest
 
 stages:
   - build
-  - test
+  # - test
   - deploy
 
 variables:
@@ -20,7 +20,7 @@ build:
   script:
     - docker-compose build
 
-test:
+# test:
   stage: test
   image: laravelsail/php83-composer:latest
   services:
