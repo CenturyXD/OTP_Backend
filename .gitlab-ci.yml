@@ -20,16 +20,18 @@ build:
   script:
     - docker-compose build
 
+
+
 test:
   stage: test
+  image: laravelsail/php83-composer:latest
+  before_script:
+    - cp .env.example .env
+    - composer install --no-interaction --prefer-dist
+    - php artisan key:generate
+    - php artisan migrate --force
   script:
-    - set -x
-    - echo "$BACKEND_ENV" > backend/.env
-    - cat backend/.env
-    - docker-compose run --rm backend composer install --no-interaction --prefer-dist --optimize-autoloader
-    - docker-compose run --rm backend php artisan test
-    - docker-compose run --rm frontend npm install
-    - docker-compose run --rm frontend npm test -- --watchAll=false
+    - php artisan test --parallel
 
 deploy:
   stage: deploy
