@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Form, Input, Button, Checkbox, Typography, message, Row, Space } from 'antd';
-import { UserOutlined, LockOutlined, SunOutlined, MoonOutlined } from '@ant-design/icons';
+import { Form, Input, Button, Checkbox, Typography, message, Row } from 'antd';
+import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthService } from '../services/AuthService';
 import AuthLayout from '../layouts/AuthLayout';

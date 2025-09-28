@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Layout, Menu, Button, Switch, Space, message } from 'antd';
 import {
     DashboardOutlined,
-    TableOutlined,
-    UserOutlined,
     LogoutOutlined,
     MenuUnfoldOutlined,
     MenuFoldOutlined,
