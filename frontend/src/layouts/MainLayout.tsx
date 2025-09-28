@@ -74,11 +74,42 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, onThemeChange }) =>
                     key: '4',
                     label: <Link to="/noc-tool/ip-brk">IP BRK</Link>,
                 },
-                // เพิ่มเมนูอื่น ๆ ที่เกี่ยวข้องกับ NOC Tool ได้ที่นี่
                 {
                     key: '6',
-                    label: <Link to="/noc-tool/another-tool">Another Tool</Link>,
-                }
+                    label: (
+                        <a
+                            href="https://whois.domaintools.com/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            Whois Lookup
+                        </a>
+                    ),
+                },
+                {
+                    key: '7',
+                    label: (
+                        <a
+                            href="https://www.iplocation.net/ip-lookup"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            IP Location Lookup
+                        </a>
+                    ),
+                },
+                {
+                    key: '8',
+                    label: (
+                        <a
+                            href="https://ipinfo.io/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            IP Information
+                        </a>
+                    ),
+                },
             ],
         },
     ];
