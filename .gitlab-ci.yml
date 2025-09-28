@@ -31,7 +31,7 @@ test:
     POSTGRES_PASSWORD: postgres
     DB_CONNECTION: pgsql
     DB_HOST: postgres
-    DB_PORT: 5432
+    DB_PORT: 5435
     DB_DATABASE: ip_management
     DB_USERNAME: postgres
     DB_PASSWORD: postgres
