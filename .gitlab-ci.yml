@@ -24,6 +24,8 @@ test:
   stage: test
   image: laravelsail/php83-composer:latest
   before_script:
+    - apt-get update && apt-get install -y libpq-dev
+    - docker-php-ext-install pdo pdo_pgsql
     - cp backend/.env.example backend/.env
     - cd backend
     - composer install --no-interaction --prefer-dist
