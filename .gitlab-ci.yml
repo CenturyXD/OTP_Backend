@@ -23,16 +23,26 @@ build:
 test:
   stage: test
   image: laravelsail/php83-composer:latest
+  services:
+    - postgres:15
+  variables:
+    POSTGRES_DB: ip_management
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: postgres
+    DB_CONNECTION: pgsql
+    DB_HOST: postgres
+    DB_PORT: 5432
+    DB_DATABASE: ip_management
+    DB_USERNAME: postgres
+    DB_PASSWORD: postgres
   before_script:
-    - apt-get update && apt-get install -y libpq-dev
-    - docker-php-ext-install pdo pdo_pgsql
     - cp backend/.env.example backend/.env
+    - sed -i 's/DB_HOST=.*/DB_HOST=postgres/' backend/.env
     - cd backend
     - composer install --no-interaction --prefer-dist
     - php artisan key:generate
     - php artisan migrate --force
   script:
-    - cd backend
     - php artisan test --parallel
 
 deploy:
