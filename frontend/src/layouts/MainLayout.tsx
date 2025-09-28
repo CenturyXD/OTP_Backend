@@ -74,6 +74,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, onThemeChange }) =>
                     key: '4',
                     label: <Link to="/noc-tool/ip-brk">IP BRK</Link>,
                 },
+                // เพิ่มเมนูอื่น ๆ ที่เกี่ยวข้องกับ NOC Tool ได้ที่นี่
+                {
+                    key: '6',
+                    label: <Link to="/noc-tool/another-tool">Another Tool</Link>,
+                }
             ],
         },
     ];
