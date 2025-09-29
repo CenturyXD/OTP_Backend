@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Modal, Form, Input, Select, Button } from 'antd';
-import type { CoreIpData } from '../api/ApiClient';
+import type { BrkIpData, CoreIpData } from '../api/ApiClient';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -11,7 +11,7 @@ export type IpBrkFormData = Omit<CoreIpData, 'id' | 'created_at' | 'updated_at'>
 interface IpFormModalProps {
     visible: boolean;
     loading: boolean;
-    initialData: CoreIpData | null; // รับข้อมูลเริ่มต้น (ถ้ามีคือโหมด Edit)
+    initialData: BrkIpData | null; // รับข้อมูลเริ่มต้น (ถ้ามีคือโหมด Edit)
     onCancel: () => void;
     onFinish: (values: IpBrkFormData) => void;
     onDelete?: () => void; // ฟังก์ชันสำหรับลบ (optional)

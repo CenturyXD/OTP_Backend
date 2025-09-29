@@ -31,23 +31,49 @@ const UserManagementPage: React.FC = () => {
     const [summary, setSummary] = useState({ total: 0, admin: 0, user: 0, superadmin: 0 });
     const [pagination, setPagination] = useState({ current: 1, pageSize: 10, total: 0 });
 
+    // Define a type for the expected response structure
+    type UserServiceResponse =
+        | { data: User[] }
+        | { data: User[]; total: number; current_page?: number; per_page?: number }
+        | { data: { data: User[]; total: number; current_page?: number; per_page?: number } };
+
     // Fetch users with pagination and search
     const fetchUsers = async (page: number, pageSize: number, search: string) => {
         setLoading(true);
         try {
-            const response = await UserService.fetchUsers(search, page, pageSize);
-            setUsers(response.data.data || response.data);
+            const response: UserServiceResponse = await UserService.fetchUsers(search, page, pageSize);
+
+            // ตรวจสอบว่า response.data เป็น array หรือ object
+            let data: User[] = [];
+            let total = 0, current_page = 1, per_page = pageSize;
+
+            if (Array.isArray(response.data)) {
+                data = response.data;
+                total = data.length;
+            } else if (
+                typeof response.data === 'object' &&
+                response.data !== null &&
+                'data' in response.data
+            ) {
+                data = (response.data as { data: User[] }).data || [];
+                total = (response.data as any).total ?? data.length;
+                current_page = (response.data as any).current_page ?? 1;
+                per_page = (response.data as any).per_page ?? pageSize;
+            }
+
+            setUsers(data);
             setPagination({
-                current: response.data.current_page,
-                pageSize: response.data.per_page,
-                total: response.data.total,
+                current: current_page,
+                pageSize: per_page,
+                total: total,
             });
+
             if (search === '') {
                 setSummary({
-                    total: response.data.total,
-                    admin: (response.data.data || response.data).filter((u: User) => u.role === 'admin').length,
-                    user: (response.data.data || response.data).filter((u: User) => u.role === 'user').length,
-                    superadmin: (response.data.data || response.data).filter((u: User) => u.role === 'superadmin').length,
+                    total: total,
+                    admin: data.filter((u: User) => u.role === 'admin').length,
+                    user: data.filter((u: User) => u.role === 'user').length,
+                    superadmin: data.filter((u: User) => u.role === 'superadmin').length,
                 });
             }
         } catch (error) {

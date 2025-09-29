@@ -108,7 +108,9 @@ const IpBrkPage: React.FC = () => {
     };
 
     const handleFormFinish = async (values: IpBrkFormData) => {
-        const action = editingRecord ? ipService.updateBrkIp(editingRecord.id, values) : ipService.createBrkIp(values);
+        const action = editingRecord && editingRecord.id !== undefined
+            ? ipService.updateBrkIp(editingRecord.id, { ...editingRecord, ...values })
+            : ipService.createBrkIp({ ...values, customer: editingRecord?.customer ?? '' });
         const successMessage = editingRecord ? 'IP address has been updated successfully.' : 'New IP address has been added successfully.';
         
         setIsSubmitting(true);
@@ -143,7 +145,7 @@ const IpBrkPage: React.FC = () => {
                 'Remark': item.remark,
                 'Status': item.status,
                 'Updated By': item.updater?.name || 'N/A',
-                'Updated At': new Date(item.updated_at).toLocaleString('th-TH'),
+                'Updated At': item.updated_at ? new Date(item.updated_at).toLocaleString('th-TH') : '',
             }));
             exportService.toExcel(dataToExport, `Bangrak_IPs_Export_${type}`);
             notification.success({ message: 'Export Successful', description: `Successfully exported ${dataToExport.length} items.` });

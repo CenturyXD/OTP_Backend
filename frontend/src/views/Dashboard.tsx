@@ -108,7 +108,9 @@ const Dashboard: React.FC = () => {
     };
 
     const handleFormFinish = async (values: IpFormData) => {
-        const action = editingRecord ? ipService.updateCoreIp(editingRecord.id, values) : ipService.createCoreIp(values);
+        const action = editingRecord && editingRecord.id !== undefined
+            ? ipService.updateCoreIp(editingRecord.id, values)
+            : ipService.createCoreIp(values);
         const successMessage = editingRecord ? 'IP address has been updated successfully.' : 'New IP address has been added successfully.';
         
         setIsSubmitting(true);
@@ -143,7 +145,7 @@ const Dashboard: React.FC = () => {
                 'Remark': item.remark,
                 'Status': item.status,
                 'Updated By': item.updater?.name || 'N/A',
-                'Updated At': new Date(item.updated_at).toLocaleString('th-TH'),
+                'Updated At': item.updated_at ? new Date(item.updated_at).toLocaleString('th-TH') : '',
             }));
             exportService.toExcel(dataToExport, `Core_IPs_Export_${type}`);
             notification.success({ message: 'Export Successful', description: `Successfully exported ${dataToExport.length} items.` });

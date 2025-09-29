@@ -15,6 +15,10 @@ export interface CoreIpData {
     remark?: string | null;
     created_at?: string;
     status: 'active' | 'inactive' | 'reserved' | 'maintenance';
+    updater?: {
+        name?: string;
+    } | null;
+    updated_at?: string;
 }
 
 export interface BrkIpData {
@@ -25,6 +29,10 @@ export interface BrkIpData {
     phone: string;
     remark?: string | null;
     created_at?: string;
+    updater?: {
+        name?: string;
+    } | null;
+    updated_at?: string;
     status: 'active' | 'inactive' | 'reserved' | 'maintenance';
 }
 
@@ -153,7 +161,7 @@ export class ApiClient {
     }
 
     // --- Brk IP Specific Methods ---
-    public getBrkIps(page: number = 1, per_page: number = 15, search: string = ''): Promise<PaginatedResponse<CoreIpData>> {
+    public getBrkIps(page: number = 1, per_page: number = 15, search: string = ''): Promise<PaginatedResponse<BrkIpData>> {
         return this.get('/api/brk-ips', { page, per_page, search });
     }
 
