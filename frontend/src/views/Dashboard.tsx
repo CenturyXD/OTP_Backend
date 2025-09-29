@@ -272,7 +272,7 @@ const Dashboard: React.FC = () => {
                     pagination={{
                         ...pagination,
                         showSizeChanger: true,
-                        pageSizeOptions: ['15', '20', '50', '100'],
+                        pageSizeOptions: ['5','15', '20', '50', '100'],
                         showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`,
                     }}
                     onChange={handleTableChange}

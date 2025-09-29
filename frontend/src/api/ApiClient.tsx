@@ -144,7 +144,7 @@ export class ApiClient {
 
     // --- Core IP Specific Methods ---
 
-    public getCoreIps(page: number = 1, per_page: number = 15, search: string = ''): Promise<PaginatedResponse<CoreIpData>> {
+    public getCoreIps(page: number = 1, per_page: number = 5, search: string = ''): Promise<PaginatedResponse<CoreIpData>> {
         return this.get('/api/core-ips', { page, per_page, search });
     }
 
@@ -161,7 +161,7 @@ export class ApiClient {
     }
 
     // --- Brk IP Specific Methods ---
-    public getBrkIps(page: number = 1, per_page: number = 15, search: string = ''): Promise<PaginatedResponse<BrkIpData>> {
+    public getBrkIps(page: number = 1, per_page: number = 5, search: string = ''): Promise<PaginatedResponse<BrkIpData>> {
         return this.get('/api/brk-ips', { page, per_page, search });
     }
 

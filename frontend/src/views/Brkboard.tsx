@@ -110,9 +110,9 @@ const IpBrkPage: React.FC = () => {
     const handleFormFinish = async (values: IpBrkFormData) => {
         const action = editingRecord && editingRecord.id !== undefined
             ? ipService.updateBrkIp(editingRecord.id, { ...editingRecord, ...values })
-            : ipService.createBrkIp({ ...values, customer: editingRecord?.customer ?? '' });
+            : ipService.createBrkIp(values);
         const successMessage = editingRecord ? 'IP address has been updated successfully.' : 'New IP address has been added successfully.';
-        
+
         setIsSubmitting(true);
         try {
             await action;
@@ -192,9 +192,9 @@ const IpBrkPage: React.FC = () => {
         { title: 'CONTACT', dataIndex: 'contact', key: 'contact', width: 200 },
         { title: 'PHONE', dataIndex: 'phone', key: 'phone', width: 150 },
         { title: 'REMARK', dataIndex: 'remark', key: 'remark', width: 250 },
-        { 
-            title: 'STATUS', 
-            dataIndex: 'status', 
+        {
+            title: 'STATUS',
+            dataIndex: 'status',
             key: 'status',
             width: 120,
             render: (status: string) => {
@@ -202,10 +202,10 @@ const IpBrkPage: React.FC = () => {
                 return <Tag color={colorMap[status] || 'default'}>{status.toUpperCase()}</Tag>;
             }
         },
-        { 
-            title: 'UPDATED BY', 
+        {
+            title: 'UPDATED BY',
             dataIndex: ['updater', 'name'],
-            key: 'updated_by', 
+            key: 'updated_by',
             width: 150,
             render: (name) => name || 'N/A'
         },
@@ -218,8 +218,8 @@ const IpBrkPage: React.FC = () => {
                 year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'
             })
         },
-        { 
-            title: 'ACTION', 
+        {
+            title: 'ACTION',
             key: 'action',
             width: 100,
             render: (_, record) => (
@@ -243,8 +243,8 @@ const IpBrkPage: React.FC = () => {
                 <Col xs={12} sm={12} md={6}><Card><Statistic title="Maintenance" value={summary.maintenance} /></Card></Col>
             </Row>
 
-            <Card 
-                title="Bangrak IP Address Table" 
+            <Card
+                title="Bangrak IP Address Table"
                 style={{ marginTop: 24 }}
                 extra={
                     <Space wrap>
@@ -264,15 +264,15 @@ const IpBrkPage: React.FC = () => {
                     </Space>
                 }
             >
-                <Table 
-                    columns={columns} 
+                <Table
+                    columns={columns}
                     dataSource={data}
                     rowKey="id"
                     loading={loading}
                     pagination={{
                         ...pagination,
                         showSizeChanger: true,
-                        pageSizeOptions: ['15', '20', '50', '100'],
+                        pageSizeOptions: ['5', '15', '20', '50', '100'],
                         showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`,
                     }}
                     onChange={handleTableChange}
@@ -280,7 +280,7 @@ const IpBrkPage: React.FC = () => {
                 />
             </Card>
 
-            <IpFormModal 
+            <IpFormModal
                 visible={isModalVisible}
                 loading={isSubmitting}
                 initialData={editingRecord}

@@ -24,8 +24,15 @@ RUN composer install --no-interaction --no-plugins --no-scripts --prefer-dist
 # เปลี่ยน owner ของไฟล์ให้เป็น user ของ web server
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
-# เปิด port 9000 สำหรับ PHP-FPM
-EXPOSE 9000
+# Optimize Laravel for production
+RUN php artisan config:cache \
+    && php artisan route:cache \
+    && php artisan view:cache
 
-# รัน PHP-FPM
-CMD ["php-fpm"]
+# Expose port 8000
+EXPOSE 8000
+
+# Start Laravel server (for development only)
+CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
+
+

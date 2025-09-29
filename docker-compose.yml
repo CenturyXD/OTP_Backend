@@ -1,5 +1,4 @@
-version: '3.8'
-
+version: "3.8"
 services:
   db_master:
     build:
@@ -11,7 +10,7 @@ services:
     volumes:
       - db_master_data:/bitnami/postgresql
     networks:
-      - my_app_network
+      - app_network
 
   db_replica:
     build:
@@ -25,69 +24,68 @@ services:
     volumes:
       - db_replica_data:/bitnami/postgresql
     networks:
-      - my_app_network
+      - app_network
 
   haproxy:
     image: haproxy:latest
     container_name: haproxy
-    restart: unless-stopped
+    restart: on-failure
     ports:
       - "5435:5432"
     depends_on:
       - db_master
       - db_replica
     networks:
-      - my_app_network
+      - app_network
     volumes:
       - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg
 
-  backend:
+  app:
     build:
       context: ./backend
-      dockerfile: Dockerfile
-    container_name: my-laravel-backend
-    restart: unless-stopped
+    container_name: laravel_app
+    restart: on-failure
     volumes:
       - ./backend:/var/www/html
-    env_file:
-      - ./backend/.env
+      - ./backend/storage:/var/www/html/storage
+      - ./backend/bootstrap/cache:/var/www/html/bootstrap/cache
+      - /var/www/html/vendor
     networks:
-      - my_app_network
+      - app_network
+    environment:
+      - APP_NAME=Laravel
+      - APP_ENV=local
+      - APP_KEY=base64:Fz9MpgEpswCWwXBBJpM86y+b1tMWnGMTsFACdAzbJb8=
+      - APP_DEBUG=true
+      - APP_URL=http://localhost
+      - DB_CONNECTION=pgsql
+      - DB_WRITE_HOST=haproxy
+      - DB_READ_HOST=haproxy
+      - DB_PORT=5435 # เปลี่ยนพอร์ตให้ตรงกับ HAProxy
+      - DB_DATABASE=ip_management
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=postgres
+    ports:
+      - "8000:8000"
     depends_on:
-      - haproxy
+      - db_master
+      - db_replica
 
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
-    container_name: my-react-frontend
-    restart: unless-stopped
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    ports:
-      - "5173:5173"
-    networks:
-      - my_app_network
-
-  nginx:
-    image: nginx:1.25-alpine
-    container_name: my-nginx-proxy
-    restart: unless-stopped
+    container_name: react_frontend
+    restart: on-failure
     ports:
       - "80:80"
-    volumes:
-      - ./frontend/dist:/app/dist
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
-      - ./backend:/var/www/html
+      - "443:443"
     networks:
-      - my_app_network
-    depends_on:
-      - backend
-      - frontend
+      - app_network
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro # แชร์ Certificate กับ Container
 
 networks:
-  my_app_network:
+  app_network:
     driver: bridge
 
 volumes:

@@ -1,20 +1,33 @@
-# ใช้ Node.js เวอร์ชั่น LTS (Long-Term Support)
-FROM node:20-alpine
+# ใช้ Node.js เป็น Base Image
+FROM node:22-alpine
 
-# ตั้งค่า working directory ภายใน container
+# ตั้งค่าโฟลเดอร์ทำงานใน Container
 WORKDIR /app
 
-# Copy package.json และ package-lock.json
+# คัดลอกไฟล์ที่จำเป็นสำหรับการติดตั้ง dependencies
 COPY package*.json ./
 
 # ติดตั้ง dependencies
 RUN npm install
 
-# Copy โค้ดทั้งหมดในโปรเจกต์
+# คัดลอกโค้ดทั้งหมดไปยัง container
 COPY . .
 
-# เปิด port 5173 สำหรับ Vite
-EXPOSE 5173
+# Build โปรเจกต์ (สำหรับ production)
+RUN npm run build
 
-# รัน development server
-CMD ["npm", "run", "dev", "--", "--host"]
+# ใช้ Nginx เป็น web server
+FROM nginx:stable-alpine
+
+# คัดลอก build ไปยัง Nginx
+COPY --from=0 /app/dist /usr/share/nginx/html
+
+# คัดลอกไฟล์ default.conf ไปยัง Nginx
+COPY nginx/default.conf /etc/nginx/conf.d/default.conf
+
+
+# เปิด Port 80
+EXPOSE 80
+
+# Start Nginx
+CMD ["nginx", "-g", "daemon off;"]

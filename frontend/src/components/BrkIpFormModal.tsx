@@ -1,12 +1,12 @@
 import React, { useEffect } from 'react';
 import { Modal, Form, Input, Select, Button } from 'antd';
-import type { BrkIpData, CoreIpData } from '../api/ApiClient';
+import type { BrkIpData } from '../api/ApiClient';
 
 const { Option } = Select;
 const { TextArea } = Input;
 
 // สร้าง Type สำหรับข้อมูลที่จะใช้สร้าง/แก้ไข
-export type IpBrkFormData = Omit<CoreIpData, 'id' | 'created_at' | 'updated_at'>;
+export type IpBrkFormData = Omit<BrkIpData, 'id' | 'created_at' | 'updated_at'>;
 
 interface IpFormModalProps {
     visible: boolean;
@@ -62,7 +62,6 @@ const BrkIpFormModal: React.FC<IpFormModalProps> = ({ visible, loading, initialD
             onCancel={onCancel}
             footer={modalFooter} // ใช้ Footer ที่สร้างขึ้นเอง
             destroyOnClose
-            afterClose={() => form.resetFields()}
         >
             <Form
                 form={form}
