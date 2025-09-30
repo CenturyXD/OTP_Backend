@@ -35,8 +35,8 @@ class BrkIpController extends Controller
             });
 
         // 2. ใช้ตัวแปร $perPage ในการแบ่งหน้า
-        $ips = $query->latest('updated_at')->paginate($perPage)->withQueryString();
-
+        // $ips = $query->latest('updated_at')->paginate($perPage)->withQueryString();
+        $ips = $query->orderBy('id', 'ASC')->paginate($perPage)->withQueryString();
         return response()->json($ips);
     }
 
