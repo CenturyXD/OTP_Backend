@@ -62,6 +62,7 @@ const BrkIpFormModal: React.FC<IpFormModalProps> = ({ visible, loading, initialD
             onCancel={onCancel}
             footer={modalFooter} // ใช้ Footer ที่สร้างขึ้นเอง
             destroyOnClose
+            afterClose={() => form.resetFields()}
         >
             <Form
                 form={form}

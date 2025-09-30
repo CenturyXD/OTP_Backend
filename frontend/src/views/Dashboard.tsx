@@ -78,7 +78,7 @@ const Dashboard: React.FC = () => {
     }, [debouncedSearchTerm]);
 
     useEffect(() => {
-        fetchData(1, 15, '');
+        fetchData(1, 5, '');
     }, []);
 
     useEffect(() => {
@@ -188,7 +188,7 @@ const Dashboard: React.FC = () => {
     // --- Table Columns ---
     const columns: TableProps<CoreIpData>['columns'] = [
         { title: 'IP ADDRESS', dataIndex: 'ip_address', key: 'ip_address', fixed: 'left', width: 150 },
-        { title: 'DIVISION', dataIndex: 'division', key: 'division', width: 200 },
+        { title: 'Service', dataIndex: 'division', key: 'division', width: 200 },
         { title: 'CONTACT', dataIndex: 'contact', key: 'contact', width: 200 },
         { title: 'PHONE', dataIndex: 'phone', key: 'phone', width: 150 },
         { title: 'REMARK', dataIndex: 'remark', key: 'remark', width: 250 },

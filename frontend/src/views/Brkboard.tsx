@@ -78,7 +78,7 @@ const IpBrkPage: React.FC = () => {
     }, [debouncedSearchTerm]);
 
     useEffect(() => {
-        fetchData(1, 15, '');
+        fetchData(1, 5, '');
     }, []);
 
     useEffect(() => {
