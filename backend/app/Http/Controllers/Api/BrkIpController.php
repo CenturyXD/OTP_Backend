@@ -30,6 +30,7 @@ class BrkIpController extends Controller
                              ->orWhereRaw('LOWER(contact) LIKE ?', ["%{$lowerSearchTerm}%"])
                              ->orWhereRaw('LOWER(phone) LIKE ?', ["%{$lowerSearchTerm}%"])
                              ->orWhereRaw('LOWER(remark) LIKE ?', ["%{$lowerSearchTerm}%"])
+                             ->orWhereRaw('LOWER(customer) LIKE ?', ["%{$lowerSearchTerm}%"])
                              ->orWhereRaw('LOWER(status) LIKE ?', ["%{$lowerSearchTerm}%"]);
                 });
             });

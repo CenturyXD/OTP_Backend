@@ -13,7 +13,6 @@ const { Search } = Input;
 
 const ipService = new IpManagementService();
 
-// Interface สำหรับเก็บข้อมูลสรุป
 interface IpSummary {
     active: number;
     inactive: number;
@@ -24,11 +23,10 @@ interface IpSummary {
 const Dashboard: React.FC = () => {
     const { notification } = App.useApp();
 
-    // --- States ---
     const [data, setData] = useState<CoreIpData[]>([]);
     const [loading, setLoading] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
-    const [pagination, setPagination] = useState({ current: 1, pageSize: 15, total: 0 });
+    const [pagination, setPagination] = useState({ current: 1, pageSize: 5, total: 0 });
     const [dbTotal, setDbTotal] = useState(0);
     const [summary, setSummary] = useState<IpSummary>({ active: 0, inactive: 0, reserved: 0, maintenance: 0 });
     const [searchTerm, setSearchTerm] = useState('');
@@ -44,12 +42,22 @@ const Dashboard: React.FC = () => {
         try {
             const response = await ipService.getCoreIps(page, pageSize, search);
             setData(response.data);
-            setPagination({ current: response.current_page, pageSize: response.per_page, total: response.total });
+            // เช็คก่อนว่าค่า pagination เปลี่ยนจริง
+            if (
+                pagination.current !== response.current_page ||
+                pagination.pageSize !== response.per_page ||
+                pagination.total !== response.total
+            ) {
+                setPagination({
+                    current: response.current_page,
+                    pageSize: response.per_page,
+                    total: response.total,
+                });
+            }
             if (search === '') {
                 setDbTotal(response.total);
             }
         } catch (error) {
-            console.error("Failed to fetch core IPs:", error);
             notification.error({ message: 'Fetch Failed', description: 'Could not fetch data from the server.' });
         } finally {
             setLoading(false);
@@ -75,7 +83,8 @@ const Dashboard: React.FC = () => {
     // --- Effects ---
     useEffect(() => {
         fetchData(pagination.current, pagination.pageSize, debouncedSearchTerm);
-    }, [debouncedSearchTerm]);
+        // eslint-disable-next-line
+    }, [debouncedSearchTerm, pagination.current, pagination.pageSize]);
 
     useEffect(() => {
         fetchData(1, 5, '');
@@ -88,8 +97,12 @@ const Dashboard: React.FC = () => {
     }, [dbTotal]);
 
     // --- Handlers ---
-    const handleTableChange = (newPagination: any) => {
-        fetchData(newPagination.current, newPagination.pageSize, searchTerm);
+    const handleTableChange: TableProps<CoreIpData>['onChange'] = (newPagination) => {
+        setPagination({
+            ...pagination,
+            current: newPagination.current || 1,
+            pageSize: newPagination.pageSize || 5,
+        });
     };
 
     const handleAdd = () => {
@@ -118,10 +131,10 @@ const Dashboard: React.FC = () => {
             await action;
             notification.success({ message: 'Success', description: successMessage });
             handleCancel();
+            setSearchTerm('');
             await fetchData(editingRecord ? pagination.current : 1, pagination.pageSize, '');
             await fetchSummaryData();
         } catch (error: any) {
-            console.error("Action failed:", error);
             notification.error({ message: 'Action Failed', description: error.message || 'An unexpected error occurred.' });
         } finally {
             setIsSubmitting(false);
@@ -150,7 +163,6 @@ const Dashboard: React.FC = () => {
             exportService.toExcel(dataToExport, `Core_IPs_Export_${type}`);
             notification.success({ message: 'Export Successful', description: `Successfully exported ${dataToExport.length} items.` });
         } catch (error) {
-            console.error("Failed to export data:", error);
             notification.error({ message: 'Export Failed', description: 'Could not export data.' });
         } finally {
             setIsExporting(false);
@@ -185,7 +197,6 @@ const Dashboard: React.FC = () => {
         });
     };
 
-    // --- Table Columns ---
     const columns: TableProps<CoreIpData>['columns'] = [
         { title: 'IP ADDRESS', dataIndex: 'ip_address', key: 'ip_address', fixed: 'left', width: 150 },
         { title: 'Service', dataIndex: 'division', key: 'division', width: 200 },
@@ -251,8 +262,14 @@ const Dashboard: React.FC = () => {
                         <Search
                             placeholder="Search..."
                             value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            onSearch={(value) => setSearchTerm(value)}
+                            onChange={e => {
+                                setPagination({ ...pagination, current: 1 });
+                                setSearchTerm(e.target.value);
+                            }}
+                            onSearch={value => {
+                                setPagination({ ...pagination, current: 1 });
+                                setSearchTerm(value);
+                            }}
                             style={{ width: 200 }}
                         />
                         <Button onClick={handleExportExcel} loading={isExporting}>
