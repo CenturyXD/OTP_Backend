@@ -8,7 +8,8 @@ import {
     MoonOutlined,
     SunOutlined,
     ToolOutlined,
-    CrownOutlined
+    CrownOutlined,
+    // FolderOpenOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, Link, useLocation } from 'react-router-dom';
 import { AuthService } from '../services/AuthService';
@@ -55,13 +56,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, onThemeChange }) =>
         },
         // {
         //     key: '2',
-        //     icon: <TableOutlined />,
-        //     label: <Link to="/tables">Tables</Link>,
-        // },
-        // {
-        //     key: '3',
-        //     icon: <UserOutlined />,
-        //     label: <Link to="/profile">Profile</Link>,
+        //     icon: <FolderOpenOutlined />,
+        //     label: <Link to="/assets">Assets</Link>,
         // },
         {
             key: 'sub1',
@@ -71,6 +67,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, onThemeChange }) =>
                 {
                     key: '4',
                     label: <Link to="/noc-tool/ip-brk">IP BRK</Link>,
+                },
+                {
+                    key:'9',
+                    label: <Link to="/noc-tool/ip-intranet">INTRANET</Link>
                 },
                 {
                     key: '6',
@@ -110,6 +110,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, onThemeChange }) =>
                 },
             ],
         },
+
     ];
 
     if (userRole === 'superadmin') {
@@ -133,6 +134,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, onThemeChange }) =>
         '/profile': '3',
         '/noc-tool/ip-brk': '4',
         '/admin/user-management': '5',
+        '/noc-tool/ip-intranet':'9'
     };
 
     // หา key จาก path จริง
