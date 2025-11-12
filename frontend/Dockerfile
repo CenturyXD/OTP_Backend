@@ -13,6 +13,9 @@ RUN npm install
 # คัดลอกโค้ดทั้งหมดไปยัง container
 COPY . .
 
+# ลบ build เก่า
+RUN rm -rf dist
+
 # Build โปรเจกต์ (สำหรับ production)
 RUN npm run build
 

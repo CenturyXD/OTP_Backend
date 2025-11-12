@@ -1,8 +1,11 @@
-import { ApiClient, type CoreIpData,type BrkIpData,  type PaginatedResponse } from '../api/ApiClient';
+
+import { ApiClient, type CoreIpData, type BrkIpData, type IntraData, type PaginatedResponse } from '../api/ApiClient';
 
 export type CoreIpCreationData = Omit<CoreIpData, 'id' | 'status' | 'created_at' | 'updated_at'>;
 
 export type BrkIpCreationData = Omit<BrkIpData, 'id' | 'status' | 'created_at' | 'updated_at'>;
+
+export type IntraIpCreationData = Omit<IntraData, 'id' | 'status' | 'created_at' | 'updated_at'>;
 
 
 export class IpManagementService {
@@ -39,9 +42,21 @@ export class IpManagementService {
     public updateBrkIp(id: number, data: BrkIpData): Promise<BrkIpData> {
         return this.apiClient.updateBrkIp(id, data);
     }
+
+    public getIntraIps(page: number, pageSize: number, search: string): Promise<PaginatedResponse<IntraData>> {
+        return this.apiClient.getIntraIps(page, pageSize, search);
+    }
+
+    public createIntraIps(data: IntraIpCreationData): Promise<BrkIpData> {
+        return this.apiClient.createIntraIps(data);
+    }
+
+    public updateIntraIps(id: number, data: BrkIpData): Promise<BrkIpData> {
+        return this.apiClient.updateIntraIps(id, data);
+    }
     /**
      * ดึงข้อมูล Brk IP แบบแบ่งหน้า
      */
-    
+
 
 }

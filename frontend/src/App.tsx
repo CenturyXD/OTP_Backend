@@ -4,13 +4,14 @@ import { ConfigProvider, theme, App as AntApp } from 'antd';
 import LoginPage from './views/LoginPage';
 import RegisterPage from './views/RegisterPage';
 import Dashboard from './views/Dashboard';
-import ProtectedRoute from './router/ProtectedRoute'; // <-- ยามด่าน 1: ตรวจสอบการ Login
-import AdminRoute from './router/AdminRoute';       // <-- ยามด่าน 2: ตรวจสอบ Role (Import เข้ามา)
+import ProtectedRoute from './router/ProtectedRoute';
+import AdminRoute from './router/AdminRoute';       
 import MainLayout from './layouts/MainLayout';
 import IpBrkPage from './views/Brkboard';
 import AccessDeniedPage from './views/AccessDenied';
 import UserManagementPage from './views/admin/user-management';
 import NotFoundPage from './views/Notfound';
+import IpIntraPage from './views/Intraboard';
 
 
 const { defaultAlgorithm, darkAlgorithm } = theme;
@@ -41,6 +42,7 @@ const App: React.FC = () => {
                         <Route path="/login" element={<LoginPage isDarkMode={isDarkMode} onThemeChange={handleThemeChange} />} />
                         <Route path="/register" element={<RegisterPage isDarkMode={isDarkMode} onThemeChange={handleThemeChange} />} />
                         <Route path="/access-denied" element={<AccessDeniedPage />} />
+                        
 
                         {/* --- Protected Routes --- */}
                         <Route
@@ -54,6 +56,7 @@ const App: React.FC = () => {
                             <Route index element={<Navigate to="/dashboard" replace />} />
                             <Route path="dashboard" element={<Dashboard />} />
                             <Route path="noc-tool/ip-brk" element={<IpBrkPage />} />
+                            <Route path="noc-tool/ip-intranet" element={<IpIntraPage />} />
 
                             {/* --- Admin Only Routes --- */}
                             <Route element={<AdminRoute />}>

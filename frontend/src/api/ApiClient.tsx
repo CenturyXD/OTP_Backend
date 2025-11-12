@@ -2,6 +2,7 @@ import axios, { type AxiosInstance, type AxiosResponse, type AxiosError } from '
 import { TokenStorage } from '../utils/TokenStorage';
 type CoreIpCreationData = Omit<CoreIpData, 'id' | 'status' | 'created_at' | 'updated_at'>;
 type BrkIpCreationData = Omit<BrkIpData, 'id' | 'status' | 'created_at' | 'updated_at'>;
+type IntraCreationData = Omit<IntraData, 'id' | 'status' | 'created_at' | 'updated_at'>;
 
 // --- Interfaces ---
 // สร้าง Interface สำหรับข้อมูล IP เพื่อให้ TypeScript รู้จัก
@@ -36,6 +37,20 @@ export interface BrkIpData {
     status: 'active' | 'inactive' | 'reserved' | 'maintenance';
 }
 
+export interface IntraData {
+    id?: number;
+    ip_address: string;
+    customer: string;
+    contact: string;
+    phone: string;
+    remark?: string | null;
+    created_at?: string;
+    updater?: {
+        name?: string;
+    } | null;
+    updated_at?: string;
+    status: 'active' | 'inactive' | 'reserved' | 'maintenance';
+}
 
 
 // Interface สำหรับ Response ที่มีการแบ่งหน้าจาก Laravel
@@ -76,7 +91,7 @@ export class ApiClient {
             (response) => response,
             (error: AxiosError) => {
                 if (error.response) {
-                     const { status, config } = error.response;
+                    const { status, config } = error.response;
 
                     if (status === 401 && !config.url?.includes('/api/login')) {
                         TokenStorage.removeToken();
@@ -172,7 +187,21 @@ export class ApiClient {
     public updateBrkIp(id: number, data: BrkIpData): Promise<BrkIpData> {
         return this.put(`/api/brk-ips/${id}`, data);
     }
-    
+
+    // --- Intra IP Specific Methods ---
+    public getIntraIps(page: number = 1, per_page: number = 5, search: string = ''): Promise<PaginatedResponse<IntraData>> {
+        return this.get('/api/intra-ips', { page, per_page, search })
+    }
+
+    public createIntraIps(data: IntraCreationData): Promise<IntraData> {
+        return this.post('/api/intra-ips', data);
+    }
+
+    public updateIntraIps(id: number, data: IntraData): Promise<IntraData> {
+        return this.put(`/api/intra-ips/${id}`, data);
+    }
+
+
     // --- User Specific Methods ---
     public getUsers(page: number = 1, per_page: number = 10, search: string = ''): Promise<PaginatedResponse<any>> {
         return this.get('/api/admin/users', { page, per_page, search });
