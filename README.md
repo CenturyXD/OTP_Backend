@@ -91,3 +91,9 @@ For open source projects, say how it is licensed.
 
 ## Project status
 If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+
+## สำหรับการ dev
+ให้เปลี่ยน .env ใน frontendเป็น REACT_APP_API_URL = http://localhost/api
+ให้ใช้ frontend\nginx\default_dev.conf
+
+
