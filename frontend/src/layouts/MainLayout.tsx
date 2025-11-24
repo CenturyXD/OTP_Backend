@@ -23,6 +23,8 @@ interface MainLayoutProps {
     onThemeChange: (isDark: boolean) => void;
 }
 
+const SIDEBAR_WIDTH = 200;
+
 const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, onThemeChange }) => {
     const [collapsed, setCollapsed] = useState(false);
     const [messageApi, contextHolder] = message.useMessage();
@@ -142,6 +144,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, onThemeChange }) =>
         location.pathname.startsWith(path)
     ) ? pathKeyMap[location.pathname] : '1';
 
+    // Responsive sidebar width
+    const getSidebarWidth = () => (collapsed ? 0 : SIDEBAR_WIDTH);
+
     return (
         <Layout style={{ minHeight: '100vh' }}>
             <Sider
@@ -153,6 +158,15 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, onThemeChange }) =>
                 collapsedWidth="0"
                 onCollapse={(collapsed) => {
                     setCollapsed(collapsed);
+                }}
+                width={SIDEBAR_WIDTH}
+                style={{
+                    position: 'fixed',
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    zIndex: 100,
+                    height: '100vh',
                 }}
             >
                 <div style={{ height: 32, margin: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}>
@@ -167,8 +181,28 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, onThemeChange }) =>
                     items={items}
                 />
             </Sider>
-            <Layout>
-                <Header style={{ padding: '0 16px', background: isDarkMode ? '#141414' : '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Layout
+                style={{
+                    marginLeft: getSidebarWidth(),
+                    transition: 'margin-left 0.2s',
+                }}
+            >
+                <Header
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: getSidebarWidth(),
+                        right: 0,
+                        zIndex: 101,
+                        width: `calc(100% - ${getSidebarWidth()}px)`,
+                        padding: '0 16px',
+                        background: isDarkMode ? '#141414' : '#fff',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        transition: 'left 0.2s, width 0.2s',
+                    }}
+                >
                     <Button
                         type="text"
                         icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
@@ -187,7 +221,16 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, onThemeChange }) =>
                         </Button>
                     </Space>
                 </Header>
-                <Content style={{ margin: '24px 16px', padding: 24, minHeight: 280, overflow: 'auto', minWidth: 0 }}>
+                <Content
+                    style={{
+                        marginTop: 64,
+                        padding: 24,
+                        minHeight: 280,
+                        overflow: 'auto',
+                        minWidth: 0,
+                        transition: 'margin-left 0.2s',
+                    }}
+                >
                     {contextHolder}
                     <Outlet />
                 </Content>
