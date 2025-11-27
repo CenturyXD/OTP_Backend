@@ -1,3 +1,5 @@
 Dockerfile*
 .env
 default.conf
+frontend/.env
+frontend/nginx/default.conf
