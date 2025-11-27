@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Menu, Button, Switch, Space, message } from 'antd';
+import { Layout, Menu, Button, Switch, Space, message, Avatar } from 'antd';
 import {
     DashboardOutlined,
     LogoutOutlined,
@@ -9,6 +9,7 @@ import {
     SunOutlined,
     ToolOutlined,
     CrownOutlined,
+    UserOutlined,
     // FolderOpenOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, Link, useLocation } from 'react-router-dom';
@@ -32,15 +33,21 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, onThemeChange }) =>
     const location = useLocation();
     const authService = new AuthService();
 
-    // --- เพิ่ม state สำหรับ openKeys ---
+    // เปิด/ปิด Submenu ตามเส้นทาง
     const [openKeys, setOpenKeys] = useState<string[]>([]);
-
     useEffect(() => {
         const keys: string[] = [];
         if (location.pathname.startsWith('/noc-tool')) keys.push('sub1');
         if (location.pathname.startsWith('/admin')) keys.push('sub2');
         setOpenKeys(keys);
     }, [location.pathname]);
+
+    // ชื่อผู้ใช้สำหรับแสดงคู่กับ Avatar
+    const [userName, setUserName] = useState('User');
+    useEffect(() => {
+        const name = localStorage.getItem('name');
+        setUserName(name && name.trim() ? name : 'User');
+    }, []);
 
     const handleLogout = () => {
         authService.logout();
@@ -71,7 +78,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, onThemeChange }) =>
                     label: <Link to="/noc-tool/ip-brk">IP BRK</Link>,
                 },
                 {
-                    key:'9',
+                    key: '9',
                     label: <Link to="/noc-tool/ip-intranet">INTRANET</Link>
                 },
                 {
@@ -136,7 +143,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, onThemeChange }) =>
         '/profile': '3',
         '/noc-tool/ip-brk': '4',
         '/admin/user-management': '5',
-        '/noc-tool/ip-intranet':'9'
+        '/noc-tool/ip-intranet': '9'
     };
 
     // หา key จาก path จริง
@@ -209,13 +216,19 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, onThemeChange }) =>
                         onClick={() => setCollapsed(!collapsed)}
                         style={{ fontSize: '16px', width: 64, height: 64 }}
                     />
-                    <Space>
+                    <Space size="middle" align="center">
                         <Switch
                             checkedChildren={<MoonOutlined />}
                             unCheckedChildren={<SunOutlined />}
                             checked={isDarkMode}
                             onChange={onThemeChange}
                         />
+                        <Space align="center">
+                            <Avatar size="small" icon={<UserOutlined />} />
+                            <span style={{ color: isDarkMode ? '#fff' : '#000', fontWeight: 500 }}>
+                                {userName}
+                            </span>
+                        </Space>
                         <Button type="primary" icon={<LogoutOutlined />} onClick={handleLogout}>
                             Logout
                         </Button>
