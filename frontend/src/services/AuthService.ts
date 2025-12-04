@@ -35,6 +35,8 @@ export class AuthService {
             if (response.success && response.access_token) {
                 TokenStorage.setToken(response.access_token);
                 localStorage.setItem('userRole', response.role);
+                localStorage.setItem('email', response.email || 'email');
+                localStorage.setItem('name', response.name || 'User');
                 return { success: true, message: response.message  };
             }
 

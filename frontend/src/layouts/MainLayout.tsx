@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Menu, Button, Switch, Space, message, Avatar } from 'antd';
+import { Layout, Menu, Button, Switch, Space, message, Avatar, Dropdown } from 'antd';
 import {
     DashboardOutlined,
-    LogoutOutlined,
     MenuUnfoldOutlined,
     MenuFoldOutlined,
     MoonOutlined,
@@ -10,7 +9,6 @@ import {
     ToolOutlined,
     CrownOutlined,
     UserOutlined,
-    // FolderOpenOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, Link, useLocation } from 'react-router-dom';
 import { AuthService } from '../services/AuthService';
@@ -63,11 +61,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, onThemeChange }) =>
             icon: <DashboardOutlined />,
             label: <Link to="/dashboard">Dashboard</Link>,
         },
-        // {
-        //     key: '2',
-        //     icon: <FolderOpenOutlined />,
-        //     label: <Link to="/assets">Assets</Link>,
-        // },
         {
             key: 'sub1',
             icon: <ToolOutlined />,
@@ -79,7 +72,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, onThemeChange }) =>
                 },
                 {
                     key: '9',
-                    label: <Link to="/noc-tool/ip-intranet">INTRANET</Link>
+                    label: <Link to="/noc-tool/ip-intranet">INTRANET</Link>,
                 },
                 {
                     key: '6',
@@ -119,7 +112,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, onThemeChange }) =>
                 },
             ],
         },
-
     ];
 
     if (userRole === 'superadmin') {
@@ -143,16 +135,31 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, onThemeChange }) =>
         '/profile': '3',
         '/noc-tool/ip-brk': '4',
         '/admin/user-management': '5',
-        '/noc-tool/ip-intranet': '9'
+        '/noc-tool/ip-intranet': '9',
+        '/settings': '10',
     };
 
     // หา key จาก path จริง
-    const selectedKey = Object.keys(pathKeyMap).find(path =>
+    const selectedKey = Object.keys(pathKeyMap).find((path) =>
         location.pathname.startsWith(path)
-    ) ? pathKeyMap[location.pathname] : '1';
+    )
+        ? pathKeyMap[location.pathname]
+        : '1';
 
     // Responsive sidebar width
     const getSidebarWidth = () => (collapsed ? 0 : SIDEBAR_WIDTH);
+
+    // เมนู Dropdown สำหรับ Avatar
+    const avatarMenu = (
+        <Menu>
+            <Menu.Item key="settings">
+                <Link to="/settings">Settings</Link>
+            </Menu.Item>
+            <Menu.Item key="logout" onClick={handleLogout}>
+                Logout
+            </Menu.Item>
+        </Menu>
+    );
 
     return (
         <Layout style={{ minHeight: '100vh' }}>
@@ -176,8 +183,24 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, onThemeChange }) =>
                     height: '100vh',
                 }}
             >
-                <div style={{ height: 32, margin: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}>
-                    <img src={ntLogo} alt="Logo" style={{ height: 20, filter: isDarkMode ? 'brightness(0) invert(1)' : 'none' }} />
+                <div
+                    style={{
+                        height: 32,
+                        margin: 16,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: 6,
+                    }}
+                >
+                    <img
+                        src={ntLogo}
+                        alt="Logo"
+                        style={{
+                            height: 20,
+                            filter: isDarkMode ? 'brightness(0) invert(1)' : 'none',
+                        }}
+                    />
                 </div>
                 <Menu
                     theme={isDarkMode ? 'dark' : 'light'}
@@ -223,15 +246,19 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, onThemeChange }) =>
                             checked={isDarkMode}
                             onChange={onThemeChange}
                         />
-                        <Space align="center">
-                            <Avatar size="small" icon={<UserOutlined />} />
-                            <span style={{ color: isDarkMode ? '#fff' : '#000', fontWeight: 500 }}>
-                                {userName}
-                            </span>
-                        </Space>
-                        <Button type="primary" icon={<LogoutOutlined />} onClick={handleLogout}>
-                            Logout
-                        </Button>
+                        <Dropdown overlay={avatarMenu} trigger={['click']}>
+                            <Space align="center" style={{ cursor: 'pointer' }}>
+                                <Avatar size="small" icon={<UserOutlined />} />
+                                <span
+                                    style={{
+                                        color: isDarkMode ? '#fff' : '#000',
+                                        fontWeight: 500,
+                                    }}
+                                >
+                                    {userName}
+                                </span>
+                            </Space>
+                        </Dropdown>
                     </Space>
                 </Header>
                 <Content

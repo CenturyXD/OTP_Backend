@@ -211,5 +211,13 @@ export class ApiClient {
         return this.put(`/api/admin/users/${id}`, data);
     }
 
+    public updateProfile(data: any): Promise<any> {
+        return this.put('/api/profile', data);
+    }
 
+    public changePassword(data: { current_password: string; new_password: string; new_password_confirmation: string; }): Promise<any> {
+        return this.post('/api/change-password', data);
+    }
+
+    
 }

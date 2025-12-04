@@ -12,6 +12,8 @@ import AccessDeniedPage from './views/AccessDenied';
 import UserManagementPage from './views/admin/user-management';
 import NotFoundPage from './views/Notfound';
 import IpIntraPage from './views/Intraboard';
+import Settings from './views/Settings';
+
 
 
 const { defaultAlgorithm, darkAlgorithm } = theme;
@@ -57,6 +59,7 @@ const App: React.FC = () => {
                             <Route path="dashboard" element={<Dashboard />} />
                             <Route path="noc-tool/ip-brk" element={<IpBrkPage />} />
                             <Route path="noc-tool/ip-intranet" element={<IpIntraPage />} />
+                            <Route path="/settings" element={<Settings/>} />
 
                             {/* --- Admin Only Routes --- */}
                             <Route element={<AdminRoute />}>
