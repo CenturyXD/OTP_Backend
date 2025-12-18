@@ -16,9 +16,9 @@ export default defineConfig({
       '/api': {
         // ส่งต่อไปยัง Nginx container
         //prod
-        target: 'http://my-nginx-proxy', 
+        //target: 'http://my-nginx-proxy', 
         //dev
-        // target: 'http://localhost:8000',
+        target: 'http://localhost:8000',
         changeOrigin: true,
       }
     }
