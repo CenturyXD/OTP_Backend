@@ -124,7 +124,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, onThemeChange }) =>
                 },
                 {
                     key: '12',
-                    label: <Link to="/Asset_Scanner">Asset Scanner </Link>,
+                    label: <Link to="/Asset_Scanner">Asset Scanner</Link>,
                 },
             ],
         }
