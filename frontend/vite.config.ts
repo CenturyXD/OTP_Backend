@@ -15,7 +15,10 @@ export default defineConfig({
       // ดักจับทุก request ที่ขึ้นต้นด้วย /api
       '/api': {
         // ส่งต่อไปยัง Nginx container
-        target: 'http://my-nginx-proxy', 
+        //prod
+        // target: 'http://my-nginx-proxy', 
+        //dev
+        target: 'http://localhost:8000',
         changeOrigin: true,
       }
     }

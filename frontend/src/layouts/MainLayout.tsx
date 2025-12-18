@@ -9,6 +9,7 @@ import {
     ToolOutlined,
     CrownOutlined,
     UserOutlined,
+    LaptopOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, Link, useLocation } from 'react-router-dom';
 import { AuthService } from '../services/AuthService';
@@ -112,6 +113,21 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, onThemeChange }) =>
                 },
             ],
         },
+        {
+            key: 'sub3',
+            icon: <LaptopOutlined />,
+            label: 'Asset Management',
+            children: [
+                {
+                    key: '11',
+                    label: <Link to="/Asset_Dashboard">Asset Dashboard</Link>,
+                },
+                {
+                    key: '12',
+                    label: <Link to="/Asset_Scanner">Asset Scanner</Link>,
+                },
+            ],
+        }
     ];
 
     if (userRole === 'superadmin') {
@@ -137,6 +153,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ isDarkMode, onThemeChange }) =>
         '/admin/user-management': '5',
         '/noc-tool/ip-intranet': '9',
         '/settings': '10',
+        '/Asset_Dashboard': '11',
+        '/Asset_Scanner': '12',
     };
 
     // หา key จาก path จริง
