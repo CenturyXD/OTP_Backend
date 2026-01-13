@@ -1,5 +1,5 @@
-# FROM bitnami/postgresql-repmgr:latest
-FROM bitnami/postgresql:latest
+FROM bitnami/postgresql-repmgr:latest
+# FROM bitnami/postgresql:latest
 
 # กำหนด environment variables สำหรับ master
 ENV POSTGRESQL_POSTGRES_PASSWORD=postgres \
@@ -23,15 +23,18 @@ USER root
 
 # สร้างโฟลเดอร์สำหรับข้อมูลและเปลี่ยนเจ้าของ
 RUN mkdir -p /bitnami/postgresql && \
+    mkdir -p /opt/bitnami/repmgr/conf && \
     chown -R 1001:1001 /bitnami/postgresql && \
     chown -R 1001:1001 /opt/bitnami/postgresql/conf && \
-    chown -R 1001:1001 /opt/bitnami/postgresql/tmp
+    chown -R 1001:1001 /opt/bitnami/postgresql/tmp && \
+    chown -R 1001:1001 /opt/bitnami/repmgr/conf && \
+    chmod -R 775 /opt/bitnami/repmgr/conf
 
 # สร้าง group และ user custom_user
-# RUN echo "custom_user:x:1001:" >> /etc/group && \
-#     echo "custom_user:x:1001:1001:Custom User:/home:/bin/bash" >> /etc/passwd && \
-#     mkdir -p /home/custom_user && \
-#     chown custom_user:custom_user /home/custom_user
+RUN echo "custom_user:x:1001:" >> /etc/group && \
+    echo "custom_user:x:1001:1001:Custom User:/home:/bin/bash" >> /etc/passwd && \
+    mkdir -p /home/custom_user && \
+    chown custom_user:custom_user /home/custom_user
 
 # กลับไปใช้ user 1001
 USER 1001
