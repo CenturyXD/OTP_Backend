@@ -1,44 +1,19 @@
 version: "3.8"
 services:
   db_master:
-    build:
-      context: ./bitnami/master
-    container_name: postgres_master
+    image: postgres:15
+    container_name: postgres_master_pos_system
     restart: on-failure
     ports:
-      - "5434:5432"
+      - "5432:5432"
     volumes:
-      - db_master_data:/bitnami/postgresql
+      - db_master_data:/var/lib/postgresql/data
     networks:
       - app_network
-
-  db_replica:
-    build:
-      context: ./bitnami/replica
-    container_name: postgres_replica
-    restart: on-failure
-    ports:
-      - "5433:5432"
-    depends_on:
-      - db_master
-    volumes:
-      - db_replica_data:/bitnami/postgresql
-    networks:
-      - app_network
-
-  haproxy:
-    image: haproxy:latest
-    container_name: haproxy
-    restart: on-failure
-    ports:
-      - "5435:5432"
-    depends_on:
-      - db_master
-      - db_replica
-    networks:
-      - app_network
-    volumes:
-      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg
+    environment:
+      - POSTGRES_DB=pos_system
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
 
   app:
     build:
@@ -59,30 +34,15 @@ services:
       - APP_DEBUG=true
       - APP_URL=http://localhost
       - DB_CONNECTION=pgsql
-      - DB_WRITE_HOST=haproxy
-      - DB_READ_HOST=haproxy
-      - DB_PORT=5435 # เปลี่ยนพอร์ตให้ตรงกับ HAProxy
-      - DB_DATABASE=ip_management
+      - DB_HOST=db_master
+      - DB_PORT=5432
+      - DB_DATABASE=pos_system
       - DB_USERNAME=postgres
       - DB_PASSWORD=postgres
     ports:
       - "8000:8000"
     depends_on:
       - db_master
-      - db_replica
-
-  frontend:
-    build:
-      context: ./frontend
-    container_name: react_frontend
-    restart: on-failure
-    ports:
-      - "80:80"
-      - "443:443"
-    networks:
-      - app_network
-    volumes:
-      - /etc/letsencrypt:/etc/letsencrypt:ro # แชร์ Certificate กับ Container
 
 networks:
   app_network:
@@ -90,4 +50,3 @@ networks:
 
 volumes:
   db_master_data:
-  db_replica_data:
