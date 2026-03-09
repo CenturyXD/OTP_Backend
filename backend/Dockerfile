@@ -3,6 +3,7 @@ FROM php:8.2-fpm-alpine
 
 # ติดตั้ง dependencies ที่จำเป็น
 RUN apk add --no-cache \
+    bash \
     build-base \
     libzip-dev \
     zip \

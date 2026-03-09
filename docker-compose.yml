@@ -2,7 +2,7 @@ version: "3.8"
 services:
   db_master:
     image: postgres:15
-    container_name: postgres_master_pos_system
+    container_name: db_master
     restart: on-failure
     ports:
       - "5432:5432"
@@ -11,14 +11,14 @@ services:
     networks:
       - app_network
     environment:
-      - POSTGRES_DB=pos_system
+      - POSTGRES_DB=db_master
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
 
   app:
     build:
       context: ./backend
-    container_name: laravel_app
+    container_name: laravel_app_police
     restart: on-failure
     volumes:
       - ./backend:/var/www/html
@@ -36,7 +36,7 @@ services:
       - DB_CONNECTION=pgsql
       - DB_HOST=db_master
       - DB_PORT=5432
-      - DB_DATABASE=pos_system
+      - DB_DATABASE=db_master
       - DB_USERNAME=postgres
       - DB_PASSWORD=postgres
     ports:
