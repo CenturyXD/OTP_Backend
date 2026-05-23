@@ -30,6 +30,10 @@ RUN php artisan config:cache \
     && php artisan route:cache \
     && php artisan view:cache
 
+RUN apk add --no-cache imap-dev \
+    && docker-php-ext-configure imap --with-imap-ssl \
+    && docker-php-ext-install imap
+
 # Expose port 8000
 EXPOSE 8000
 

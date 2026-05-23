@@ -1,24 +1,24 @@
 version: "3.8"
 services:
-  db_master:
+  db_otp:
     image: postgres:15
-    container_name: db_master
+    container_name: db_otp
     restart: on-failure
     ports:
       - "5432:5432"
     volumes:
-      - db_master_data:/var/lib/postgresql/data
+      - db_otp_data:/var/lib/postgresql/data
     networks:
       - app_network
     environment:
-      - POSTGRES_DB=db_master
+      - POSTGRES_DB=db_otp
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
 
   app:
     build:
       context: ./backend
-    container_name: laravel_app_police
+    container_name: laravel_app_otp
     restart: on-failure
     volumes:
       - ./backend:/var/www/html
@@ -34,19 +34,19 @@ services:
       - APP_DEBUG=true
       - APP_URL=http://localhost
       - DB_CONNECTION=pgsql
-      - DB_HOST=db_master
+      - DB_HOST=db_otp
       - DB_PORT=5432
-      - DB_DATABASE=db_master
+      - DB_DATABASE=db_otp
       - DB_USERNAME=postgres
       - DB_PASSWORD=postgres
     ports:
       - "8000:8000"
     depends_on:
-      - db_master
+      - db_otp
 
 networks:
   app_network:
     driver: bridge
 
 volumes:
-  db_master_data:
+  db_otp_data:

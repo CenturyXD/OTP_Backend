@@ -17,11 +17,10 @@ class UserManagementController extends Controller
      */
     public function index(Request $request)
     {
-        $perPage = $request->query('per_page', 5);
 
         $searchTerm = $request->query('search');
 
-        $query = User::where('id', '!=', auth()->id());
+        $query = User::query();
 
         if ($searchTerm) {
             $query->where(function ($q) use ($searchTerm) {
@@ -32,8 +31,7 @@ class UserManagementController extends Controller
             });
         }
 
-        $users = $query->latest()->paginate($perPage)->withQueryString();
-
+        $users = $query->latest()->get();
         return response()->json($users);
     }
 
