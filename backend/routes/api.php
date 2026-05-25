@@ -7,7 +7,7 @@ use App\Http\Controllers\Api\Admin\UserManagementController;
 use App\Http\Controllers\OtpController;
 
 // ... Public routes (login, register) ...
-Route::get('/test', function() {
+Route::get('/test', function () {
     return response()->json(['message' => 'API is working']);
 });
 
@@ -15,6 +15,7 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 // Route::apiResource('/otp', OtpController::class);
 Route::post('/otp/fetch', [OtpController::class, 'fetchOtp']);
+Route::post('/inbox/emails', [OtpController::class, 'fetchInboxEmails']);
 
 // เปลี่ยน middleware เป็น 'auth:sanctum' สำหรับทุก Route ที่ต้อง Login
 Route::middleware('auth:sanctum')->group(function () {
@@ -34,5 +35,4 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(function () {
         Route::apiResource('users', UserManagementController::class);
     });
-
 });

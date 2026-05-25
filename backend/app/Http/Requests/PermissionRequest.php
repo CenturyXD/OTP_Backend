@@ -24,7 +24,8 @@ class PermissionRequest extends FormRequest
         return [
             //
             'emails' => 'required|string',
-            'otp' => 'required|string',
+            'service' => 'required|string',
+            'password' => 'nullable|string',
             'expires_at' => 'nullable|date',
             'is_verified' => 'nullable|boolean',
         ];

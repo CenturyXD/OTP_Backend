@@ -24,8 +24,6 @@ class OtpController extends Controller
         return response()->json(['data' => $otps]);
     }
 
-
-
     /**
      * Show the form for creating a new resource.
      */
@@ -36,10 +34,21 @@ class OtpController extends Controller
      */
     public function store(PermissionRequest $request)
     {
-        //
+        $email = $request->validated()['emails'];
+        $service = $request->validated()['service'] ?? null;
+        // ถ้ามี email+service ซ้ำใน table otp แล้วจะไม่อนุญาตให้เพิ่ม
+        $exists = Otp::where('email', $email)
+            ->where('service', $service)
+            ->exists();
+        if ($exists) {
+            return response()->json([
+                'message' => 'มีข้อมูล email และ service นี้อยู่แล้ว ไม่สามารถเพิ่มซ้ำได้'
+            ], 409);
+        }
         $otp = Otp::create([
-            'email' => $request->validated()['emails'], // ใช้แค่ email แรกจากอาร์เรย์
-            'otp' => $request->validated()['otp'] ?? null,
+            'email' => $email, // ใช้แค่ email แรกจากอาร์เรย์
+            'service' => $service,
+            'password' => $request->validated()['password'] ?? null,
             'owner' => auth()->id(),
             'is_verified' => true,
             'expires_at' => $request->validated()['expires_at'] ?? now()->addDays(30),
@@ -94,25 +103,63 @@ class OtpController extends Controller
         //
     }
 
-    public function fetchOtp(OtpRequest $request)
+    public function fetchOtp(Request $request)
     {
-        $targetSender = $request->validated()['target'];
-        $service = $request->validated()['service'] ?? null; // รับค่า service เพิ่มเติม (optional)
-        // เช็คใน table otp ก่อนว่ามี email นี้, is_verified = true และ expires_at ยังไม่หมดอายุ
-        $otpExists = Otp::where('email', $targetSender)
+        $request->validate([
+            'email' => 'required|email',
+            'service' => 'required|string',
+        ]);
+        $email = $request->input('email');
+        $service = $request->input('service');
+        $mailbox = '{imap.gmail.com:993/imap/ssl}INBOX';
+        // ดึง password จาก table otp ตาม email
+        $otpRow = Otp::where('email', $email)
             ->where('is_verified', true)
             ->where('expires_at', '>', now())
-            ->exists();
-        if (!$otpExists) {
-            return response()->json(['message' => 'email not found or not verified or expired contact support'], 404);
+            ->orderByDesc('created_at')
+            ->first();
+        $password = $otpRow ? $otpRow->password : null;
+        try {
+            $imapService = new ImapOtpService();
+            $result = $imapService->fetchLatestOtpFromInbox($email, $password, $service, $mailbox);
+            if ($result && !empty($result['otp'])) {
+                return response()->json($result);
+            } else {
+                // คืน debug_subjects กลับไปด้วยถ้าไม่พบ OTP
+                $debug = isset($result['debug_subjects']) ? $result['debug_subjects'] : [];
+                return response()->json([
+                    'message' => 'ไม่พบรหัส password หรือ password ไม่ถูกต้อง',
+                    'debug_subjects' => $debug
+                ], 404);
+            }
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'เกิดข้อผิดพลาดในการค้นหา OTP: ' . $e->getMessage()
+            ], 500);
         }
-        // ดึง OTP จากอีเมล sattawat.ticket@gmail.com ที่ถูก forward มาจาก $targetSender และ filter ด้วย service ถ้ามี
-        $imapService = new ImapOtpService();
-        $otp = $imapService->fetchLatestOtp($targetSender, $service); // ส่งค่า $service ไปยัง ImapOtpService เพื่อใช้ในการกรอง OTP ตาม service
+    }
 
-        if (!empty($otp['otp'])) {
-            return response()->json($otp);
+    public function fetchInboxEmails(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'password' => 'required|string',
+            'mailbox' => 'nullable|string',
+        ]);
+        $email = $request->input('email');
+        $password = $request->input('password');
+        $mailbox = $request->input('mailbox', '{imap.gmail.com:993/imap/ssl}INBOX');
+        try {
+            $imapService = new ImapOtpService();
+            $emails = $imapService->fetchInboxEmails(30, $email, $password, $mailbox);
+            return response()->json([
+                'message' => 'ดึงอีเมลจากกล่องขาเข้าสำเร็จ',
+                'data' => $emails
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'เกิดข้อผิดพลาดในการดึงอีเมล: ' . $e->getMessage()
+            ], 500);
         }
-        return response()->json(['message' => 'No OTP found'], 404);
     }
 }
