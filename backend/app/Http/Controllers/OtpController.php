@@ -111,7 +111,7 @@ class OtpController extends Controller
         ]);
         $email = $request->input('email');
         $service = $request->input('service');
-        $mailbox = '{imap.gmail.com:993/imap/ssl}INBOX';
+        $mailbox = 'IMAP_MAILBOX={imap.gmail.com:993/imap/ssl/novalidate-cert}INBOX';
 
         // ดึง OTP row ที่ยืนยันแล้วและยังไม่หมดอายุ
         $otpRow = Otp::where([
