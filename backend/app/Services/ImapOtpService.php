@@ -26,13 +26,29 @@ class ImapOtpService
         }
         $serviceLower = mb_strtolower($service);
         $debugSubjects = [];
-        for ($i = $numMessages; $i > 0; $i--) {
+        $maxSearch = 10; // จำกัดวนหา 10 ฉบับล่าสุด
+        $start = max($numMessages - $maxSearch + 1, 1);
+        for ($i = $numMessages; $i >= $start; $i--) {
             $overview = imap_fetch_overview($inbox, $i, 0);
             if (empty($overview)) continue;
             $subject = $this->decodeMimeStr($overview[0]->subject ?? '');
-            $debugSubjects[] = $subject;
-            if ($serviceLower && mb_stripos($subject, $serviceLower) === false) continue;
             $from = $this->decodeMimeStr($overview[0]->from ?? '');
+            $debugSubjects[] = [
+                'subject' => $subject,
+                'from' => $from
+            ];
+            $match = false;
+            if ($serviceLower === 'netflix') {
+                // Netflix: match เฉพาะ subject
+                $match = mb_stripos($subject, 'netflix') !== false;
+            } elseif ($serviceLower === 'disney+' || $serviceLower === 'disney') {
+                // Disney+: match เฉพาะ from หรือ subject มี disney
+                $match = (mb_stripos($from, 'disney') !== false) || (mb_stripos($subject, 'disney') !== false);
+            } else {
+                // อื่นๆ: match ทั้ง subject และ from
+                $match = ($serviceLower && (mb_stripos($subject, $serviceLower) !== false || mb_stripos($from, $serviceLower) !== false));
+            }
+            if (!$match) continue;
             $date = $overview[0]->date ?? '';
             $structure = imap_fetchstructure($inbox, $i);
             $parts = $this->getAllTextParts($inbox, $i, $structure);
@@ -58,7 +74,7 @@ class ImapOtpService
             }
         }
         imap_close($inbox);
-        // ส่ง subject ทั้งหมดกลับมาด้วยถ้าไม่พบ OTP เพื่อ debug
+        // ส่ง subject+from ทั้งหมดกลับมาด้วยถ้าไม่พบ OTP เพื่อ debug
         return [
             'otp' => null,
             'debug_subjects' => $debugSubjects,
@@ -70,7 +86,6 @@ class ImapOtpService
      */
     private function extractOtp($body)
     {
-        // รองรับ OTP 4-8 หลัก (เช่น 3401, 123456, 12345678)
         if (preg_match('/\b\d{4,8}\b/', $body, $matches)) {
             return $matches[0];
         }

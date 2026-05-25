@@ -126,10 +126,9 @@ class OtpController extends Controller
                 return response()->json($result);
             } else {
                 // คืน debug_subjects กลับไปด้วยถ้าไม่พบ OTP
-                $debug = isset($result['debug_subjects']) ? $result['debug_subjects'] : [];
                 return response()->json([
-                    'message' => 'ไม่พบรหัส password หรือ password ไม่ถูกต้อง',
-                    'debug_subjects' => $debug
+                    'message' => 'ไม่พบ OTP ในอีเมลล่าสุดที่เกี่ยวข้องกับบริการนี้',
+                    'debug_subjects' => $result['debug_subjects'] ?? [],
                 ], 404);
             }
         } catch (\Exception $e) {
