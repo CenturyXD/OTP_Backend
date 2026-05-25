@@ -112,28 +112,76 @@ class OtpController extends Controller
         $email = $request->input('email');
         $service = $request->input('service');
         $mailbox = '{imap.gmail.com:993/imap/ssl}INBOX';
-        // ดึง password จาก table otp ตาม email
-        $otpRow = Otp::where('email', $email)
-            ->where('is_verified', true)
-            ->where('expires_at', '>', now())
-            ->orderByDesc('created_at')
-            ->first();
-        $password = $otpRow ? $otpRow->password : null;
+
+        // ดึง OTP row ที่ยืนยันแล้วและยังไม่หมดอายุ
+        $otpRow = Otp::where([
+            ['email', '=', $email],
+            ['is_verified', '=', 1],
+            ['expires_at', '>', now()],
+        ])->orderByDesc('created_at')->first();
+
+        $verify = $otpRow->is_verified ?? false;
+        $password = $otpRow->password;
+        if (!$verify) {
+            return response()->json([
+                'message' => 'Email นี้หมดอายุแล้ว กรุณาติดต่อผู้ดูแลระบบเพื่อขออนุญาตใช้งานใหม่'
+            ], 403);
+        }
+        if (!$password) {
+            return response()->json([
+                'message' => 'ไม่พบรหัสผ่านสำหรับ email นี้ กรุณาติดต่อผู้ดูแลระบบเพื่อขออนุญาตใช้งานใหม่'
+            ], 404);
+        }
+
+
+
         try {
             $imapService = new ImapOtpService();
             $result = $imapService->fetchLatestOtpFromInbox($email, $password, $service, $mailbox);
-            if ($result && !empty($result['otp'])) {
-                return response()->json($result);
-            } else {
-                // คืน debug_subjects กลับไปด้วยถ้าไม่พบ OTP
-                return response()->json([
-                    'message' => 'ไม่พบ OTP ในอีเมลล่าสุดที่เกี่ยวข้องกับบริการนี้',
-                    'debug_subjects' => $result['debug_subjects'] ?? [],
-                ], 404);
+
+            // กรณี error เฉพาะทาง
+            if (!empty($result['error_type'])) {
+                if ($result['error_type'] === 'auth_failed') {
+                    return response()->json([
+                        'message' => 'รหัสผ่านอีเมลไม่ถูกต้อง',
+                        'error_type' => 'auth_failed',
+                    ], 401);
+                }
+                if ($result['error_type'] === 'imap_unavailable') {
+                    return response()->json([
+                        'message' => 'เซิร์ฟเวอร์อีเมลไม่พร้อมใช้งานหรือปิดให้บริการ',
+                        'error_type' => 'imap_unavailable',
+                    ], 503);
+                }
             }
-        } catch (\Exception $e) {
+
+            // สำเร็จ
+            if (!empty($result['otp'])) {
+                return response()->json($result);
+            }
+
+            // ไม่พบ OTP แต่มี debug/error
             return response()->json([
-                'message' => 'เกิดข้อผิดพลาดในการค้นหา OTP: ' . $e->getMessage()
+                'message' => 'ไม่พบ OTP ในอีเมลล่าสุดที่เกี่ยวข้องกับบริการนี้',
+                'debug_subjects' => $result['debug_subjects'] ?? [],
+                'error_message' => $result['error_message'] ?? null,
+            ], 404);
+        } catch (\Exception $e) {
+            $msg = $e->getMessage();
+            if (stripos($msg, 'Authentication failed') !== false || stripos($msg, 'Invalid credentials') !== false) {
+                return response()->json([
+                    'message' => 'รหัสผ่านอีเมลไม่ถูกต้อง',
+                    'error_type' => 'auth_failed',
+                ], 401);
+            }
+            if (stripos($msg, 'Connection refused') !== false || stripos($msg, 'Cannot connect') !== false || stripos($msg, 'IMAP server closed') !== false) {
+                return response()->json([
+                    'message' => 'เซิร์ฟเวอร์อีเมลไม่พร้อมใช้งานหรือปิดให้บริการ',
+                    'error_type' => 'imap_unavailable',
+                ], 503);
+            }
+            return response()->json([
+                'message' => 'เกิดข้อผิดพลาดในการค้นหา OTP: ' . $msg
             ], 500);
         }
     }
