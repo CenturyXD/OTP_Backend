@@ -104,7 +104,7 @@ class OtpController extends Controller
         //
         $otp = Otp::findOrFail($id);
         // ตรวจสอบว่า OTP นี้เป็นของ user ที่ login หรือไม่
-        if ((int)$otp->owner !== (int)Auth::id()) {
+        if ((int)$otp->owner !== (int)Auth::id() && Auth::user()->role !== 'admin') {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
         $otp->delete();
