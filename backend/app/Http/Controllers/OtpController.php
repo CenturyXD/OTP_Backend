@@ -7,6 +7,7 @@ use App\Http\Requests\OtpRequest;
 use Illuminate\Http\Request;
 use App\Services\ImapOtpService;
 use App\Http\Requests\PermissionRequest;
+use Illuminate\Support\Facades\Auth;
 
 class OtpController extends Controller
 {
@@ -16,10 +17,10 @@ class OtpController extends Controller
     public function index()
     {
         // แสดง OTP ทั้งหมดถ้าเป็น admin, ถ้าไม่ใช่แสดงเฉพาะของตัวเอง
-        if (auth()->user() && auth()->user()->role === 'admin') {
+        if (Auth::user() && Auth::user()->role === 'admin') {
             $otps = Otp::all();
         } else {
-            $otps = Otp::where('owner', auth()->id())->get();
+            $otps = Otp::where('owner', Auth::id())->get();
         }
         return response()->json(['data' => $otps]);
     }
@@ -49,7 +50,7 @@ class OtpController extends Controller
             'email' => $email, // ใช้แค่ email แรกจากอาร์เรย์
             'service' => $service,
             'password' => $request->validated()['password'] ?? null,
-            'owner' => auth()->id(),
+            'owner' => Auth::id(),
             'is_verified' => true,
             'expires_at' => $request->validated()['expires_at'] ?? now()->addDays(30),
         ]);
@@ -82,7 +83,7 @@ class OtpController extends Controller
         //
         $otp = Otp::findOrFail($id);
         // ตรวจสอบว่า OTP นี้เป็นของ user ที่ login หรือไม่
-        if ((int)$otp->owner !== (int)auth()->id()) {
+        if ((int)$otp->owner !== (int)Auth::id()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -108,10 +109,11 @@ class OtpController extends Controller
         $request->validate([
             'email' => 'required|email',
             'service' => 'required|string',
+            'mailbox' => 'nullable|string',
         ]);
         $email = $request->input('email');
         $service = $request->input('service');
-        $mailbox = 'IMAP_MAILBOX={imap.gmail.com:993/imap/ssl/novalidate-cert}INBOX';
+        $mailbox = $request->input('mailbox', '{imap.gmail.com:993/imap/ssl/novalidate-cert}INBOX');
 
         // ดึง OTP row ที่ยืนยันแล้วและยังไม่หมดอายุ
         $otpRow = Otp::where([
@@ -139,20 +141,33 @@ class OtpController extends Controller
             $imapService = new ImapOtpService();
             $result = $imapService->fetchLatestOtpFromInbox($email, $password, $service, $mailbox);
 
+            if (empty($result) || !is_array($result)) {
+                return response()->json([
+                    'message' => 'ไม่พบอีเมลในกล่องขาเข้า'
+                ], 404);
+            }
+
             // กรณี error เฉพาะทาง
             if (!empty($result['error_type'])) {
                 if ($result['error_type'] === 'auth_failed') {
                     return response()->json([
-                        'message' => 'รหัสผ่านอีเมลไม่ถูกต้อง',
+                        'message' => 'เข้าสู่ระบบ IMAP ไม่สำเร็จ กรุณาตรวจสอบ App Password หรือการเปิดใช้ IMAP ของอีเมล',
                         'error_type' => 'auth_failed',
+                        'detail' => $result['error_message'] ?? null,
                     ], 401);
                 }
                 if ($result['error_type'] === 'imap_unavailable') {
                     return response()->json([
                         'message' => 'เซิร์ฟเวอร์อีเมลไม่พร้อมใช้งานหรือปิดให้บริการ',
                         'error_type' => 'imap_unavailable',
+                        'detail' => $result['error_message'] ?? null,
                     ], 503);
                 }
+
+                return response()->json([
+                    'message' => $result['error_message'] ?? 'เกิดข้อผิดพลาดในการเชื่อมต่อ IMAP',
+                    'error_type' => $result['error_type'],
+                ], 500);
             }
 
             // สำเร็จ

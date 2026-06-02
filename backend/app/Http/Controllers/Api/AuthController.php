@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Auth;
 use Exception;
 use App\Http\Requests\Api\RegisterRequest;
 use App\Http\Requests\Api\LoginRequest;
@@ -16,10 +18,14 @@ class AuthController extends Controller
 {
     public function register(RegisterRequest $request)
     {
-
         DB::beginTransaction();
+        $logoPath = null;
 
         try {
+            if ($request->hasFile('logo')) {
+                $logoPath = $request->file('logo')->store('logos', 'public');
+            }
+
             $user = User::create([
                 'name' => $request->name,
                 'username' => $request->username,
@@ -27,6 +33,7 @@ class AuthController extends Controller
                 'password' => Hash::make($request->password),
                 'status' => 'deactive',
                 'role' => 'user',
+                'logo' => $logoPath,
             ]);
 
             DB::commit();
@@ -34,14 +41,19 @@ class AuthController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'User registered successfully',
-                'user' => $user
+                'user' => $user,
+                'logo_url' => $user->logo ? asset('storage/' . $user->logo) : null,
             ], 201);
         } catch (Exception $e) {
             DB::rollBack();
 
+            if ($logoPath && Storage::disk('public')->exists($logoPath)) {
+                Storage::disk('public')->delete($logoPath);
+            }
+
             return response()->json([
                 'success' => false,
-                'message' => 'Registration failed due to a server error.'
+                'message' => $e->getMessage() ?: 'User registration failed due to a server error.'
             ], 500);
         }
     }
@@ -81,9 +93,10 @@ class AuthController extends Controller
     public function updateprofile(ProfileRequest $request)
     {
         DB::beginTransaction();
+        $newLogoPath = null;
 
-        try{
-            $user = auth()->user();
+        try {
+            $user = User::findOrFail(Auth::id());
 
             if ($request->has('name')) {
                 $user->name = $request->name;
@@ -94,6 +107,15 @@ class AuthController extends Controller
             if ($request->has('email')) {
                 $user->email = $request->email;
             }
+            if ($request->hasFile('logo')) {
+                $newLogoPath = $request->file('logo')->store('logos', 'public');
+
+                if ($user->logo && Storage::disk('public')->exists($user->logo)) {
+                    Storage::disk('public')->delete($user->logo);
+                }
+
+                $user->logo = $newLogoPath;
+            }
 
             $user->save();
 
@@ -102,22 +124,26 @@ class AuthController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Profile updated successfully',
-                'user' => $user
+                'user' => $user,
+                'logo_url' => $user->logo ? asset('storage/' . $user->logo) : null,
             ]);
-        }catch(Exception $e){
+        } catch (Exception $e) {
             DB::rollBack();
+
+            if ($newLogoPath && Storage::disk('public')->exists($newLogoPath)) {
+                Storage::disk('public')->delete($newLogoPath);
+            }
 
             return response()->json([
                 'success' => false,
                 'message' => 'Profile update failed due to a server error.'
             ], 500);
         }
-
     }
 
     public function changepassword(PasswordRequest $request)
     {
-        $user = auth()->user();
+        $user = User::findOrFail(Auth::id());
 
         if (!Hash::check($request->current_password, $user->password)) {
             return response()->json([
@@ -134,5 +160,4 @@ class AuthController extends Controller
             'message' => 'Password changed successfully'
         ]);
     }
-
 }

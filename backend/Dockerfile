@@ -25,6 +25,11 @@ RUN composer install --no-interaction --no-plugins --no-scripts --prefer-dist
 # เปลี่ยน owner ของไฟล์ให้เป็น user ของ web server
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
+# Ensure framework cache/view/session directories exist during image build.
+RUN mkdir -p /var/www/html/storage/framework/cache \
+    /var/www/html/storage/framework/sessions \
+    /var/www/html/storage/framework/views
+
 # Optimize Laravel for production
 RUN php artisan config:cache \
     && php artisan route:cache \
@@ -33,6 +38,9 @@ RUN php artisan config:cache \
 RUN apk add --no-cache imap-dev \
     && docker-php-ext-configure imap --with-imap-ssl \
     && docker-php-ext-install imap
+
+# Increase upload limits for image file uploads.
+RUN printf "file_uploads=On\nupload_max_filesize=10M\npost_max_size=12M\nmemory_limit=256M\nmax_file_uploads=20\n" > /usr/local/etc/php/conf.d/uploads.ini
 
 # Expose port 8000
 EXPOSE 8000

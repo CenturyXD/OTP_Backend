@@ -6,16 +6,49 @@ namespace App\Services;
 class ImapOtpService
 {
 
+    private function normalizeMailbox($mailbox)
+    {
+        $mailbox = trim((string)$mailbox);
+
+        if (stripos($mailbox, 'IMAP_MAILBOX=') === 0) {
+            $mailbox = substr($mailbox, strlen('IMAP_MAILBOX='));
+        }
+
+        if ($mailbox === '') {
+            return '{imap.gmail.com:993/imap/ssl/novalidate-cert}INBOX';
+        }
+
+        return $mailbox;
+    }
+
     /**
      * ดึง OTP ล่าสุดจากกล่องเมลที่ subject/body มีชื่อ service
      */
     public function fetchLatestOtpFromInbox($email, $password, $service, $mailbox = '{imap.gmail.com:993/imap/ssl}INBOX')
     {
+        $mailbox = $this->normalizeMailbox($mailbox);
         $inbox = @imap_open($mailbox, $email, $password);
         if (!$inbox) {
+            $imapErrors = imap_errors() ?: [];
+            $lastError = implode(' | ', $imapErrors);
+            $errorType = 'imap_unavailable';
+
+            if (
+                stripos($lastError, 'authentication failed') !== false ||
+                stripos($lastError, 'invalid credentials') !== false ||
+                stripos($lastError, 'authent') !== false ||
+                stripos($lastError, 'web login required') !== false ||
+                stripos($lastError, 'application-specific password') !== false ||
+                stripos($lastError, 'username and password not accepted') !== false
+            ) {
+                $errorType = 'auth_failed';
+            }
+
             return [
+                'error_type' => $errorType,
                 'error' => 'IMAP open failed',
-                'imap_errors' => imap_errors(),
+                'error_message' => $lastError ?: null,
+                'imap_errors' => $imapErrors,
                 'imap_alerts' => imap_alerts(),
             ];
         }
@@ -26,7 +59,7 @@ class ImapOtpService
         }
         $serviceLower = mb_strtolower($service);
         $debugSubjects = [];
-        $maxSearch = 10; // จำกัดวนหา 10 ฉบับล่าสุด
+        $maxSearch = 20; // จำกัดวนหา 10 ฉบับล่าสุด
         $start = max($numMessages - $maxSearch + 1, 1);
         for ($i = $numMessages; $i >= $start; $i--) {
             $overview = imap_fetch_overview($inbox, $i, 0);
@@ -39,8 +72,8 @@ class ImapOtpService
             ];
             $match = false;
             if ($serviceLower === 'netflix') {
-                // Netflix: match เฉพาะ subject
-                $match = mb_stripos($subject, 'netflix') !== false;
+                // Netflix: บางเมล subject เป็นภาษาไทยล้วน จึงต้องเช็ค from ด้วย
+                $match = (mb_stripos($subject, 'netflix') !== false) || (mb_stripos($from, 'netflix') !== false);
             } elseif ($serviceLower === 'disney+' || $serviceLower === 'disney') {
                 // Disney+: match เฉพาะ from หรือ subject มี disney
                 $match = (mb_stripos($from, 'disney') !== false) || (mb_stripos($subject, 'disney') !== false);
@@ -134,7 +167,7 @@ class ImapOtpService
      */
     public function fetchInboxEmails($maxFetch = 30, $email = null, $appPassword = null, $mailbox = null)
     {
-        $mailbox = $mailbox ?: '{imap.gmail.com:993/imap/ssl}INBOX';
+        $mailbox = $this->normalizeMailbox($mailbox ?: '{imap.gmail.com:993/imap/ssl/novalidate-cert}INBOX');
         $inbox = @imap_open($mailbox, $email, $appPassword);
         if (!$inbox) {
             return [
