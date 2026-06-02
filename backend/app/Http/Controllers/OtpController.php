@@ -89,7 +89,8 @@ class OtpController extends Controller
 
         $otp->update([
             'email' => $request->validated()['emails'],
-            'otp' => $request->validated()['otp'] ?? $otp->otp,
+            'service' => $request->validated()['service'] ?? $otp->service,
+            'password' => $request->validated()['password'] ?? $otp->password,
             'is_verified' => $request->validated()['is_verified'] ?? $otp->is_verified,
             'expires_at' => $request->validated()['expires_at'] ?? $otp->expires_at,
         ]);
