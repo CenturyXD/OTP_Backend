@@ -127,6 +127,21 @@ class AuthController extends Controller
             if ($request->has('theme')) {
                 $user->theme = $request->theme;
             }
+            if ($request->has('theme[primary]')) {
+                $user->theme['primary'] = $request->input('theme[primary]');
+            }
+            if ($request->has('theme[primary-dark]')) {
+                $user->theme['primary-dark'] = $request->input('theme[primary-dark]');
+            }
+            if ($request->has('theme[accent]')) {
+                $user->theme['accent'] = $request->input('theme[accent]');
+            }
+            if ($request->has('theme[secondary]')) {
+                $user->theme['secondary'] = $request->input('theme[secondary]');
+            }
+            if ($request->has('theme[gradient]')) {
+                $user->theme['gradient'] = $request->input('theme[gradient]');
+            }
 
             $user->save();
 
