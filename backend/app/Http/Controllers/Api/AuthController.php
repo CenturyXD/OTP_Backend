@@ -44,11 +44,11 @@ class AuthController extends Controller
                 'role' => 'user',
                 'logo' => $logoPath,
                 'theme' => is_string($theme) ? $theme : null,
-                'theme[primary]' => $this->themeInput($request, 'primary'),
-                'theme[primary-dark]' => $this->themeInput($request, 'primary-dark'),
-                'theme[accent]' => $this->themeInput($request, 'accent'),
-                'theme[secondary]' => $this->themeInput($request, 'secondary'),
-                'theme[gradient]' => $this->themeInput($request, 'gradient'),
+                'theme[primary]' => $this->themeInput($request, 'primary') ?? null,
+                'theme[primary-dark]' => $this->themeInput($request, 'primary-dark') ?? null,
+                'theme[accent]' => $this->themeInput($request, 'accent') ?? null,
+                'theme[secondary]' => $this->themeInput($request, 'secondary') ?? null,
+                'theme[gradient]' => $this->themeInput($request, 'gradient') ?? null,
             ]);
 
             DB::commit();
