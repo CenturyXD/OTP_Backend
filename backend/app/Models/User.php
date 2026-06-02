@@ -26,7 +26,12 @@ class User extends Authenticatable
         'password',
         'role',
         'status',
-        'theme'
+        'theme',
+        'theme[primary]',
+        'theme[primary-dark]',
+        'theme[accent]',
+        'theme[secondary]',
+        'theme[gradient]',
     ];
 
     /**
