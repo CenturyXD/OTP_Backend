@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use App\Services\ImapOtpService;
 use App\Http\Requests\PermissionRequest;
 use Illuminate\Support\Facades\Auth;
+use App\Models\User;
 
 class OtpController extends Controller
 {
@@ -19,10 +20,12 @@ class OtpController extends Controller
         // แสดง OTP ทั้งหมดถ้าเป็น admin, ถ้าไม่ใช่แสดงเฉพาะของตัวเอง
         if (Auth::user() && Auth::user()->role === 'admin') {
             $otps = Otp::all();
+            $user = Auth::user();
         } else {
             $otps = Otp::where('owner', Auth::id())->get();
+            $user = Auth::user();
         }
-        return response()->json(['data' => $otps]);
+        return response()->json(['data' => $otps, 'user' => $user]);
     }
 
     /**
