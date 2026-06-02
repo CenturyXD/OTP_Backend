@@ -190,4 +190,16 @@ class AuthController extends Controller
             ], 500);
         }
     }
+
+    public function profile()
+    {
+        $user = User::findOrFail(Auth::id());
+
+        return response()->json([
+            'success' => true,
+            'user' => $user,
+            'logo_url' => $user->logo ? asset('storage/' . $user->logo) : null,
+            'theme' => $user->theme,
+        ]);
+    }
 }
