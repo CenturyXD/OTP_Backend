@@ -79,10 +79,18 @@ class UserManagementController extends Controller
         try {
             $validatedData = $request->validate([
                 'status' => ['sometimes', Rule::in(['active', 'deactive'])],
+                'start_date' => 'sometimes|nullable|date',
+                'end_date' => 'sometimes|nullable|date|after_or_equal:start_date',
             ]);
 
             if (isset($validatedData['status'])) {
                 $user->status = $validatedData['status'];
+            }
+            if (isset($validatedData['start_date'])) {
+                $user->start_date = $validatedData['start_date'];
+            }
+            if (isset($validatedData['end_date'])) {
+                $user->end_date = $validatedData['end_date'];
             }
 
             $user->save();
