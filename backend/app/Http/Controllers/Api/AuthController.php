@@ -3,21 +3,26 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Auth;
-use Exception;
-use App\Http\Requests\Api\RegisterRequest;
 use App\Http\Requests\Api\LoginRequest;
-use App\Http\Requests\Api\ProfileRequest;
 use App\Http\Requests\Api\PasswordRequest;
-use Illuminate\Http\Request;
+use App\Http\Requests\Api\ProfileRequest;
+use App\Http\Requests\Api\RegisterRequest;
+use App\Models\User;
+use Exception;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 
 class AuthController extends Controller
 {
+    private function themeInput(Request $request, string $key): ?string
+    {
+        return $request->input("theme.$key", $request->input("theme[$key]"));
+    }
+
     public function register(RegisterRequest $request)
     {
         DB::beginTransaction();
@@ -28,6 +33,8 @@ class AuthController extends Controller
                 $logoPath = $request->file('logo')->store('logos', 'public');
             }
 
+            $theme = $request->input('theme');
+
             $user = User::create([
                 'name' => $request->name,
                 'username' => $request->username,
@@ -36,11 +43,12 @@ class AuthController extends Controller
                 'status' => 'deactive',
                 'role' => 'user',
                 'logo' => $logoPath,
-                'theme[primary]' => $request->theme['primary'] ?? null,
-                'theme[primary-dark]' => $request->theme['primary-dark'] ?? null,
-                'theme[accent]' => $request->theme['accent'] ?? null,
-                'theme[secondary]' => $request->theme['secondary'] ?? null,
-                'theme[gradient]' => $request->theme['gradient'] ?? null,
+                'theme' => is_string($theme) ? $theme : null,
+                'theme[primary]' => $this->themeInput($request, 'primary'),
+                'theme[primary-dark]' => $this->themeInput($request, 'primary-dark'),
+                'theme[accent]' => $this->themeInput($request, 'accent'),
+                'theme[secondary]' => $this->themeInput($request, 'secondary'),
+                'theme[gradient]' => $this->themeInput($request, 'gradient'),
             ]);
 
             DB::commit();
@@ -50,6 +58,12 @@ class AuthController extends Controller
                 'message' => 'User registered successfully',
                 'user' => $user,
                 'logo_url' => $user->logo ? asset('storage/' . $user->logo) : null,
+                'theme' => $user->theme,
+                'theme[primary]' => $user->{'theme[primary]'} ?? null,
+                'theme[primary-dark]' => $user->{'theme[primary-dark]'} ?? null,
+                'theme[accent]' => $user->{'theme[accent]'} ?? null,
+                'theme[secondary]' => $user->{'theme[secondary]'} ?? null,
+                'theme[gradient]' => $user->{'theme[gradient]'} ?? null,
             ], 201);
         } catch (Exception $e) {
             DB::rollBack();
@@ -76,7 +90,6 @@ class AuthController extends Controller
             ], 401);
         }
 
-        // เช็คสถานะ active
         if ($user->status !== 'active') {
             return response()->json([
                 'success' => false,
@@ -123,20 +136,35 @@ class AuthController extends Controller
 
                 $user->logo = $newLogoPath;
             }
-            if ($request->has('theme[primary]')) {
-                $user->theme['primary'] = $request->input('theme[primary]');
+
+            $theme = $request->input('theme');
+            if ($request->has('theme') && is_string($theme)) {
+                $user->theme = $theme;
             }
-            if ($request->has('theme[primary-dark]')) {
-                $user->theme['primary-dark'] = $request->input('theme[primary-dark]');
+
+            $primary = $this->themeInput($request, 'primary');
+            if (!is_null($primary)) {
+                $user->{'theme[primary]'} = $primary;
             }
-            if ($request->has('theme[accent]')) {
-                $user->theme['accent'] = $request->input('theme[accent]');
+
+            $primaryDark = $this->themeInput($request, 'primary-dark');
+            if (!is_null($primaryDark)) {
+                $user->{'theme[primary-dark]'} = $primaryDark;
             }
-            if ($request->has('theme[secondary]')) {
-                $user->theme['secondary'] = $request->input('theme[secondary]');
+
+            $accent = $this->themeInput($request, 'accent');
+            if (!is_null($accent)) {
+                $user->{'theme[accent]'} = $accent;
             }
-            if ($request->has('theme[gradient]')) {
-                $user->theme['gradient'] = $request->input('theme[gradient]');
+
+            $secondary = $this->themeInput($request, 'secondary');
+            if (!is_null($secondary)) {
+                $user->{'theme[secondary]'} = $secondary;
+            }
+
+            $gradient = $this->themeInput($request, 'gradient');
+            if (!is_null($gradient)) {
+                $user->{'theme[gradient]'} = $gradient;
             }
 
             $user->save();
@@ -148,11 +176,12 @@ class AuthController extends Controller
                 'message' => 'Profile updated successfully',
                 'user' => $user,
                 'logo_url' => $user->logo ? asset('storage/' . $user->logo) : null,
-                'theme[primary]' => $user->theme['primary'] ?? null,
-                'theme[primary-dark]' => $user->theme['primary-dark'] ?? null,
-                'theme[accent]' => $user->theme['accent'] ?? null,
-                'theme[secondary]' => $user->theme['secondary'] ?? null,
-                'theme[gradient]' => $user->theme['gradient'] ?? null,
+                'theme' => $user->theme,
+                'theme[primary]' => $user->{'theme[primary]'} ?? null,
+                'theme[primary-dark]' => $user->{'theme[primary-dark]'} ?? null,
+                'theme[accent]' => $user->{'theme[accent]'} ?? null,
+                'theme[secondary]' => $user->{'theme[secondary]'} ?? null,
+                'theme[gradient]' => $user->{'theme[gradient]'} ?? null,
             ]);
         } catch (Exception $e) {
             DB::rollBack();
@@ -196,11 +225,12 @@ class AuthController extends Controller
             return response()->json([
                 'success' => true,
                 'logo_url' => $user->logo ? asset('storage/' . $user->logo) : null,
-                'theme[primary]' => $user->theme['primary'] ?? null,
-                'theme[primary-dark]' => $user->theme['primary-dark'] ?? null,
-                'theme[accent]' => $user->theme['accent'] ?? null,
-                'theme[secondary]' => $user->theme['secondary'] ?? null,
-                'theme[gradient]' => $user->theme['gradient'] ?? null,
+                'theme' => $user->theme,
+                'theme[primary]' => $user->{'theme[primary]'} ?? null,
+                'theme[primary-dark]' => $user->{'theme[primary-dark]'} ?? null,
+                'theme[accent]' => $user->{'theme[accent]'} ?? null,
+                'theme[secondary]' => $user->{'theme[secondary]'} ?? null,
+                'theme[gradient]' => $user->{'theme[gradient]'} ?? null,
             ]);
         } catch (ModelNotFoundException $e) {
             return response()->json([
@@ -223,11 +253,12 @@ class AuthController extends Controller
             'success' => true,
             'user' => $user,
             'logo_url' => $user->logo ? asset('storage/' . $user->logo) : null,
-            'theme[primary]' => $user->theme['primary'] ?? null,
-            'theme[primary-dark]' => $user->theme['primary-dark'] ?? null,
-            'theme[accent]' => $user->theme['accent'] ?? null,
-            'theme[secondary]' => $user->theme['secondary'] ?? null,
-            'theme[gradient]' => $user->theme['gradient'] ?? null,
+            'theme' => $user->theme,
+            'theme[primary]' => $user->{'theme[primary]'} ?? null,
+            'theme[primary-dark]' => $user->{'theme[primary-dark]'} ?? null,
+            'theme[accent]' => $user->{'theme[accent]'} ?? null,
+            'theme[secondary]' => $user->{'theme[secondary]'} ?? null,
+            'theme[gradient]' => $user->{'theme[gradient]'} ?? null,
         ]);
     }
 }
