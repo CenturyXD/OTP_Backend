@@ -226,7 +226,7 @@ class AuthController extends Controller
             return response()->json([
                 'success' => true,
                 'logo_url' => $user->logo ? asset('storage/' . $user->logo) : null,
-                'theme' => $user->theme,
+                'name' => $user->name,
                 'theme[primary]' => $user->{'theme[primary]'} ?? null,
                 'theme[primary-dark]' => $user->{'theme[primary-dark]'} ?? null,
                 'theme[accent]' => $user->{'theme[accent]'} ?? null,
