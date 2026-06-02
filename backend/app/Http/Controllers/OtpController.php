@@ -130,7 +130,7 @@ class OtpController extends Controller
         ])->orderByDesc('created_at')->first();
 
         $verify = $otpRow->is_verified ?? false;
-        $password = $otpRow->password;
+        $password = $otpRow->password?? null;
         if (!$verify) {
             return response()->json([
                 'message' => 'Email นี้หมดอายุแล้ว กรุณาติดต่อผู้ดูแลระบบเพื่อขออนุญาตใช้งานใหม่'
