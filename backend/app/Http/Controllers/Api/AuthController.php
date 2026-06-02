@@ -37,6 +37,11 @@ class AuthController extends Controller
                 'role' => 'user',
                 'logo' => $logoPath,
                 'theme' => $request->theme,
+                'theme[primary]' => $request->theme['primary'] ?? null,
+                'theme[primary-dark]' => $request->theme['primary-dark'] ?? null,
+                'theme[accent]' => $request->theme['accent'] ?? null,
+                'theme[secondary]' => $request->theme['secondary'] ?? null,
+                'theme[gradient]' => $request->theme['gradient'] ?? null,
             ]);
 
             DB::commit();
@@ -133,6 +138,11 @@ class AuthController extends Controller
                 'user' => $user,
                 'logo_url' => $user->logo ? asset('storage/' . $user->logo) : null,
                 'theme' => $user->theme,
+                'theme[primary]' => $user->theme['primary'] ?? null,
+                'theme[primary-dark]' => $user->theme['primary-dark'] ?? null,
+                'theme[accent]' => $user->theme['accent'] ?? null,
+                'theme[secondary]' => $user->theme['secondary'] ?? null,
+                'theme[gradient]' => $user->theme['gradient'] ?? null,
             ]);
         } catch (Exception $e) {
             DB::rollBack();
@@ -177,6 +187,11 @@ class AuthController extends Controller
                 'success' => true,
                 'logo_url' => $user->logo ? asset('storage/' . $user->logo) : null,
                 'theme' => $user->theme,
+                'theme[primary]' => $user->theme['primary'] ?? null,
+                'theme[primary-dark]' => $user->theme['primary-dark'] ?? null,
+                'theme[accent]' => $user->theme['accent'] ?? null,
+                'theme[secondary]' => $user->theme['secondary'] ?? null,
+                'theme[gradient]' => $user->theme['gradient'] ?? null,
             ]);
         } catch (ModelNotFoundException $e) {
             return response()->json([
@@ -200,6 +215,11 @@ class AuthController extends Controller
             'user' => $user,
             'logo_url' => $user->logo ? asset('storage/' . $user->logo) : null,
             'theme' => $user->theme,
+            'theme[primary]' => $user->theme['primary'] ?? null,
+            'theme[primary-dark]' => $user->theme['primary-dark'] ?? null,
+            'theme[accent]' => $user->theme['accent'] ?? null,
+            'theme[secondary]' => $user->theme['secondary'] ?? null,
+            'theme[gradient]' => $user->theme['gradient'] ?? null,
         ]);
     }
 }

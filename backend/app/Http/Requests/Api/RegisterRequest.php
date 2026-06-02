@@ -33,6 +33,11 @@ class RegisterRequest extends FormRequest
             'password' => 'required|string|min:8',
             'logo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:10240',
             'theme' => 'nullable|string|max:255',
+            'theme[primary]' => 'nullable|string|max:255',
+            'theme[primary-dark]' => 'nullable|string|max:255',
+            'theme[accent]' => 'nullable|string|max:255',
+            'theme[secondary]' => 'nullable|string|max:255',
+            'theme[gradient]' => 'nullable|string|max:255',
         ];
     }
 }
