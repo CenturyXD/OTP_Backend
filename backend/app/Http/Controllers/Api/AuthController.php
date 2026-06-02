@@ -36,7 +36,6 @@ class AuthController extends Controller
                 'status' => 'deactive',
                 'role' => 'user',
                 'logo' => $logoPath,
-                'theme' => $request->theme,
                 'theme[primary]' => $request->theme['primary'] ?? null,
                 'theme[primary-dark]' => $request->theme['primary-dark'] ?? null,
                 'theme[accent]' => $request->theme['accent'] ?? null,
@@ -124,9 +123,6 @@ class AuthController extends Controller
 
                 $user->logo = $newLogoPath;
             }
-            if ($request->has('theme')) {
-                $user->theme = $request->theme;
-            }
             if ($request->has('theme[primary]')) {
                 $user->theme['primary'] = $request->input('theme[primary]');
             }
@@ -152,7 +148,6 @@ class AuthController extends Controller
                 'message' => 'Profile updated successfully',
                 'user' => $user,
                 'logo_url' => $user->logo ? asset('storage/' . $user->logo) : null,
-                'theme' => $user->theme,
                 'theme[primary]' => $user->theme['primary'] ?? null,
                 'theme[primary-dark]' => $user->theme['primary-dark'] ?? null,
                 'theme[accent]' => $user->theme['accent'] ?? null,
@@ -201,7 +196,6 @@ class AuthController extends Controller
             return response()->json([
                 'success' => true,
                 'logo_url' => $user->logo ? asset('storage/' . $user->logo) : null,
-                'theme' => $user->theme,
                 'theme[primary]' => $user->theme['primary'] ?? null,
                 'theme[primary-dark]' => $user->theme['primary-dark'] ?? null,
                 'theme[accent]' => $user->theme['accent'] ?? null,
@@ -229,7 +223,6 @@ class AuthController extends Controller
             'success' => true,
             'user' => $user,
             'logo_url' => $user->logo ? asset('storage/' . $user->logo) : null,
-            'theme' => $user->theme,
             'theme[primary]' => $user->theme['primary'] ?? null,
             'theme[primary-dark]' => $user->theme['primary-dark'] ?? null,
             'theme[accent]' => $user->theme['accent'] ?? null,
