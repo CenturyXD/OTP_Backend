@@ -13,6 +13,8 @@ use App\Http\Requests\Api\RegisterRequest;
 use App\Http\Requests\Api\LoginRequest;
 use App\Http\Requests\Api\ProfileRequest;
 use App\Http\Requests\Api\PasswordRequest;
+use Illuminate\Http\Request;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class AuthController extends Controller
 {
@@ -34,6 +36,7 @@ class AuthController extends Controller
                 'status' => 'deactive',
                 'role' => 'user',
                 'logo' => $logoPath,
+                'theme' => $request->theme,
             ]);
 
             DB::commit();
@@ -116,6 +119,9 @@ class AuthController extends Controller
 
                 $user->logo = $newLogoPath;
             }
+            if ($request->has('theme')) {
+                $user->theme = $request->theme;
+            }
 
             $user->save();
 
@@ -126,6 +132,7 @@ class AuthController extends Controller
                 'message' => 'Profile updated successfully',
                 'user' => $user,
                 'logo_url' => $user->logo ? asset('storage/' . $user->logo) : null,
+                'theme' => $user->theme,
             ]);
         } catch (Exception $e) {
             DB::rollBack();
@@ -159,5 +166,28 @@ class AuthController extends Controller
             'success' => true,
             'message' => 'Password changed successfully'
         ]);
+    }
+
+    public function info($id)
+    {
+        try {
+            $user = User::findOrFail($id);
+
+            return response()->json([
+                'success' => true,
+                'logo_url' => $user->logo ? asset('storage/' . $user->logo) : null,
+                'theme' => $user->theme,
+            ]);
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not found'
+            ], 404);
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch user info due to a server error.'
+            ], 500);
+        }
     }
 }

@@ -11,6 +11,9 @@ Route::get('/test', function () {
     return response()->json(['message' => 'API is working']);
 });
 
+Route::post('/info/{id}', [AuthController::class, 'info']);
+
+
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 // Route::apiResource('/otp', OtpController::class);
