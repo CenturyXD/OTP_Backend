@@ -106,7 +106,8 @@ class AuthController extends Controller
             'token_type' => 'Bearer',
             'role' => $user->role,
             'name' => $user->name,
-            'email' => $user->email
+            'email' => $user->email,
+            'logo_url' => $user->logo ? asset('storage/' . $user->logo) : null
         ]);
     }
 
