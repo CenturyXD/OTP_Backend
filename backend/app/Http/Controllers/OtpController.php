@@ -102,6 +102,13 @@ class OtpController extends Controller
     public function destroy(string $id)
     {
         //
+        $otp = Otp::findOrFail($id);
+        // ตรวจสอบว่า OTP นี้เป็นของ user ที่ login หรือไม่
+        if ((int)$otp->owner !== (int)Auth::id()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+        $otp->delete();
+        return response()->json(['message' => 'deleted successfully']);
     }
 
     public function fetchOtp(Request $request)
