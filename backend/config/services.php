@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'microsoft_graph' => [
+        'base_url' => env('MICROSOFT_GRAPH_BASE_URL', 'https://graph.microsoft.com/v1.0'),
+    ],
+
 ];

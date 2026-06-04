@@ -28,6 +28,7 @@ class PermissionRequest extends FormRequest
             'password' => 'nullable|string',
             'expires_at' => 'nullable|date',
             'is_verified' => 'nullable|boolean',
+            'mail_type' => 'nullable|string',
         ];
     }
 
@@ -41,6 +42,9 @@ class PermissionRequest extends FormRequest
             'expires_at.date' => 'expires_at ต้องเป็นวันที่ที่ถูกต้อง',
             'expires_at.nullable' => 'expires_at สามารถเว้นว่างได้',
             'is_verified.boolean' => 'is_verified ต้องเป็นค่า true หรือ false',
+            'is_verified.nullable' => 'is_verified สามารถเว้นว่างได้',
+            'mail_type.string' => 'mail_type ต้องเป็นข้อความ เท่านั้น',
+            'mail_type.nullable' => 'mail_type สามารถเว้นว่างได้',
         ];
     }
 }

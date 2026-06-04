@@ -59,3 +59,13 @@ If you discover a security vulnerability within Laravel, please send an e-mail t
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+
+## Microsoft Entra / Outlook IMAP
+
+If you want to read mail from Outlook or Hotmail using Entra.microsoft.com, register the app in Microsoft Entra ID, grant the delegated permissions for `IMAP.AccessAsUser.All`, `Mail.Read`, `offline_access`, `openid`, `profile`, and `User.Read`, then send an OAuth access token to the API with `auth_mode=xoauth2`.
+
+The IMAP endpoints now default to the Microsoft mailbox format:
+
+`{outlook.office365.com:993/imap/ssl/novalidate-cert}INBOX`
+
+Use `password` for legacy IMAP accounts, or `access_token` for Entra-backed Microsoft accounts.

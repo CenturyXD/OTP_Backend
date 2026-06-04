@@ -6,6 +6,27 @@ namespace App\Services;
 class ImapOtpService
 {
 
+    private function normalizeBody(string $text): string
+    {
+        $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $text = preg_replace('/[\x00-\x1F\x7F]+/u', ' ', $text) ?? $text;
+        $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
+
+        return trim($text);
+    }
+
+    private function extractOtpCandidate(string $candidate): ?string
+    {
+        $digits = preg_replace('/\D+/', '', $candidate) ?? '';
+        $len = strlen($digits);
+
+        if ($len >= 4 && $len <= 8) {
+            return $digits;
+        }
+
+        return null;
+    }
+
     private function normalizeMailbox($mailbox)
     {
         $mailbox = trim((string)$mailbox);
@@ -119,9 +140,30 @@ class ImapOtpService
      */
     private function extractOtp($body)
     {
-        if (preg_match('/\b\d{4,8}\b/', $body, $matches)) {
-            return $matches[0];
+        $normalizedBody = $this->normalizeBody((string)$body);
+        $keywordPattern = '(?:otp|one\s*time|verification|verify|security|passcode|pin|code|รหัส|ยืนยัน)';
+
+        // Priority 1: code near OTP keywords, handles formats like 1 2 3 4 5 6 or 12-34-56.
+        if (
+            preg_match('/' . $keywordPattern . '\D{0,30}((?:\d[\s\-]?){4,8})/iu', $normalizedBody, $matches) ||
+            preg_match('/((?:\d[\s\-]?){4,8})\D{0,30}' . $keywordPattern . '/iu', $normalizedBody, $matches)
+        ) {
+            $otp = $this->extractOtpCandidate((string)($matches[1] ?? $matches[0] ?? ''));
+            if ($otp !== null) {
+                return $otp;
+            }
         }
+
+        // Priority 2: any standalone 4-8 digit token.
+        if (preg_match('/(?<!\d)(\d{4,8})(?!\d)/', $normalizedBody, $matches)) {
+            return (string)$matches[1];
+        }
+
+        // Priority 3: grouped digits separated by spaces or hyphens.
+        if (preg_match('/(?<!\d)((?:\d[\s\-]?){4,8})(?!\d)/', $normalizedBody, $matches)) {
+            return $this->extractOtpCandidate((string)$matches[1]);
+        }
+
         return null;
     }
 
@@ -143,6 +185,22 @@ class ImapOtpService
                 $body = imap_fetchbody($inbox, $msgNumber, $partNumber);
             }
             $decoded = $body;
+            $encoding = (int)($structure->encoding ?? 0);
+
+            if ($encoding === 3) {
+                $decoded = base64_decode((string)$body, true);
+                if ($decoded === false) {
+                    $decoded = $body;
+                }
+            } elseif ($encoding === 4) {
+                $decoded = quoted_printable_decode((string)$body);
+            }
+
+            if (!is_string($decoded)) {
+                $decoded = (string)$body;
+            }
+
+            $decoded = $this->normalizeBody($decoded);
             $results[] = [
                 'subtype' => $subtype,
                 'content' => $decoded,

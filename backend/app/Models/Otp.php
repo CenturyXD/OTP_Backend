@@ -15,5 +15,6 @@ class Otp extends Model
         'is_verified',
         'expires_at',
         'owner',
+        'mail_type',
     ];
 }

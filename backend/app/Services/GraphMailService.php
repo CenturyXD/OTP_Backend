@@ -1,0 +1,193 @@
+<?php
+
+namespace App\Services;
+
+use Illuminate\Support\Facades\Http;
+
+class GraphMailService
+{
+    private const DEFAULT_BASE_URL = 'https://graph.microsoft.com/v1.0';
+
+    private function normalizeBody(string $text): string
+    {
+        $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $text = preg_replace('/[\x00-\x1F\x7F]+/u', ' ', $text) ?? $text;
+        $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
+
+        return trim($text);
+    }
+
+    private function extractOtpCandidate(string $candidate): ?string
+    {
+        $digits = preg_replace('/\D+/', '', $candidate) ?? '';
+        $len = strlen($digits);
+
+        if ($len >= 4 && $len <= 8) {
+            return $digits;
+        }
+
+        return null;
+    }
+
+    private function baseUrl(): string
+    {
+        return rtrim((string)config('services.microsoft_graph.base_url', self::DEFAULT_BASE_URL), '/');
+    }
+
+    private function graphGet(string $path, string $accessToken, array $query = []): array
+    {
+        $response = Http::withToken($accessToken)
+            ->acceptJson()
+            ->timeout(30)
+            ->get($this->baseUrl() . $path, $query);
+
+        if ($response->successful()) {
+            return [
+                'ok' => true,
+                'data' => $response->json(),
+            ];
+        }
+
+        $errorMessage = data_get($response->json(), 'error.message')
+            ?: ('Graph request failed with status ' . $response->status());
+
+        $errorType = $response->status() === 401 ? 'auth_failed' : 'graph_unavailable';
+
+        return [
+            'ok' => false,
+            'status' => $response->status(),
+            'error_type' => $errorType,
+            'error_message' => $errorMessage,
+        ];
+    }
+
+    private function normalizeMessage(array $message): array
+    {
+        $subject = (string)($message['subject'] ?? '');
+        $fromName = (string)data_get($message, 'from.emailAddress.name', '');
+        $fromAddress = (string)data_get($message, 'from.emailAddress.address', '');
+        $from = trim($fromName . ' <' . $fromAddress . '>');
+
+        $bodyType = strtolower((string)data_get($message, 'body.contentType', ''));
+        $bodyContent = (string)data_get($message, 'body.content', '');
+        $bodyPreview = (string)($message['bodyPreview'] ?? '');
+
+        $body = $bodyContent !== '' ? $bodyContent : $bodyPreview;
+        if ($bodyType === 'html') {
+            $body = strip_tags($body);
+        }
+        $body = $this->normalizeBody($body);
+
+        return [
+            'subject' => $subject,
+            'from' => $from,
+            'date' => (string)($message['receivedDateTime'] ?? ''),
+            'body' => trim($body),
+        ];
+    }
+
+    private function extractOtp(string $body): ?string
+    {
+        $normalizedBody = $this->normalizeBody($body);
+        $keywordPattern = '(?:otp|one\s*time|verification|verify|security|passcode|pin|code|รหัส|ยืนยัน)';
+
+        if (
+            preg_match('/' . $keywordPattern . '\D{0,30}((?:\d[\s\-]?){4,8})/iu', $normalizedBody, $matches) ||
+            preg_match('/((?:\d[\s\-]?){4,8})\D{0,30}' . $keywordPattern . '/iu', $normalizedBody, $matches)
+        ) {
+            $otp = $this->extractOtpCandidate((string)($matches[1] ?? $matches[0] ?? ''));
+            if ($otp !== null) {
+                return $otp;
+            }
+        }
+
+        if (preg_match('/(?<!\d)(\d{4,8})(?!\d)/', $normalizedBody, $matches)) {
+            return (string)$matches[1];
+        }
+
+        if (preg_match('/(?<!\d)((?:\d[\s\-]?){4,8})(?!\d)/', $normalizedBody, $matches)) {
+            return $this->extractOtpCandidate((string)$matches[1]);
+        }
+
+        return null;
+    }
+
+    public function fetchInboxEmails(int $maxFetch, string $accessToken, string $mailFolder = 'inbox'): array
+    {
+        $query = [
+            '$top' => min(max($maxFetch, 1), 50),
+            '$orderby' => 'receivedDateTime desc',
+            '$select' => 'subject,from,receivedDateTime,bodyPreview,body',
+        ];
+
+        $result = $this->graphGet('/me/mailFolders/' . rawurlencode($mailFolder) . '/messages', $accessToken, $query);
+        if (!$result['ok']) {
+            return [
+                'error_type' => $result['error_type'],
+                'error_message' => $result['error_message'],
+            ];
+        }
+
+        $messages = (array)($result['data']['value'] ?? []);
+
+        return array_map(fn(array $message) => $this->normalizeMessage($message), $messages);
+    }
+
+    public function fetchLatestOtpFromInbox(string $accessToken, string $service, string $mailFolder = 'inbox', int $maxSearch = 20): array
+    {
+        $emails = $this->fetchInboxEmails($maxSearch, $accessToken, $mailFolder);
+
+        if (isset($emails['error_type'])) {
+            return $emails;
+        }
+
+        if (empty($emails)) {
+            return [];
+        }
+
+        $serviceLower = mb_strtolower($service);
+        $debugSubjects = [];
+
+        foreach ($emails as $email) {
+            $subject = (string)($email['subject'] ?? '');
+            $from = (string)($email['from'] ?? '');
+            $body = (string)($email['body'] ?? '');
+            $debugSubjects[] = [
+                'subject' => $subject,
+                'from' => $from,
+            ];
+
+            $match = false;
+            if ($serviceLower === 'netflix') {
+                $match = (mb_stripos($subject, 'netflix') !== false) || (mb_stripos($from, 'netflix') !== false);
+            } elseif ($serviceLower === 'disney+' || $serviceLower === 'disney') {
+                $match = (mb_stripos($from, 'disney') !== false) || (mb_stripos($subject, 'disney') !== false);
+            } else {
+                $match = $serviceLower !== '' && (
+                    mb_stripos($subject, $serviceLower) !== false ||
+                    mb_stripos($from, $serviceLower) !== false ||
+                    mb_stripos($body, $serviceLower) !== false
+                );
+            }
+
+            if (!$match) {
+                continue;
+            }
+
+            $otp = $this->extractOtp($body);
+            if ($otp) {
+                return [
+                    'otp' => $otp,
+                    'subject' => $subject,
+                    'from' => $from,
+                    'date' => $email['date'] ?? '',
+                ];
+            }
+        }
+
+        return [
+            'otp' => null,
+            'debug_subjects' => $debugSubjects,
+        ];
+    }
+}
