@@ -31,7 +31,7 @@ class ProfileRequest extends FormRequest
             'name' => 'sometimes|required|string|max:255',
             'username' => 'sometimes|required|string|max:255|unique:users,username,' . $userId,
             'email' => 'sometimes|required|string|email|max:255|unique:users,email,' . $userId,
-            'logo' => 'sometimes|nullable|image|mimes:jpg,jpeg,png,webp|max:10240',
+            'logo' => 'sometimes|nullable|image|mimes:jpg,jpeg,png,webp,svg|max:10240',
             'theme[primary]' => 'sometimes|nullable|string|max:255',
             'theme[primary-dark]' => 'sometimes|nullable|string|max:255',
             'theme[accent]' => 'sometimes|nullable|string|max:255',

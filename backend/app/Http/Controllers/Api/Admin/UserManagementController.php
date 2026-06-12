@@ -46,6 +46,7 @@ class UserManagementController extends Controller
             'username' => 'required|string|max:255|unique:users',
             'password' => 'required|string|min:8|confirmed',
             'role' => ['required', Rule::in(['admin', 'user'])], // จำกัด role ที่สร้างได้
+            'email' => 'nullable|email|max:255|unique:users',
         ]);
 
         $user = User::create([
@@ -53,6 +54,7 @@ class UserManagementController extends Controller
             'username' => $validatedData['username'],
             'password' => Hash::make($validatedData['password']),
             'role' => $validatedData['role'],
+            'email' => $validatedData['email'] ?? null,
         ]);
 
         return response()->json([
