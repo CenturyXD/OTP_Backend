@@ -472,7 +472,8 @@ class OtpController extends Controller
                         $password,
                         $service,
                         $centralImapMailboxes,
-                        $requestedEmail
+                        $requestedEmail,
+                        true
                     );
                 } else {
                     $result = $imapService->fetchLatestOtpFromInbox(
