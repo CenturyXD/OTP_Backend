@@ -8,9 +8,89 @@ use App\Services\GraphMailService;
 use App\Services\ImapOtpService;
 use App\Http\Requests\PermissionRequest;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class OtpController extends Controller
 {
+    private const OTP_UNLOCK_TTL_MINUTES = 5;
+
+    private function normalizeScreenLocks(array $locks): array
+    {
+        return collect($locks)
+            ->filter(fn($lock) => is_array($lock))
+            ->map(function (array $lock) {
+                $screenName = trim((string)($lock['screen_name'] ?? ''));
+                $code = (string)($lock['lock_code'] ?? '');
+
+                if ($screenName === '' || $code === '') {
+                    return null;
+                }
+
+                return [
+                    'screen_name' => $screenName,
+                    'code_hash' => Hash::make($code),
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    private function consumeUnlockToken(string $unlockToken, string $email, string $service): bool
+    {
+        $cacheKey = 'otp_unlock:' . $unlockToken;
+        $payload = Cache::pull($cacheKey);
+
+        if (!is_array($payload)) {
+            return false;
+        }
+
+        return ($payload['email'] ?? null) === strtolower($email)
+            && ($payload['service'] ?? null) === strtolower($service);
+    }
+
+    private function verifyScreenLockForOtp(Otp $otpRow, string $screenName, string $screenCode): array
+    {
+        $locks = $otpRow->screen_locks;
+        if (!is_array($locks) || count($locks) === 0) {
+            return [
+                'ok' => false,
+                'message' => 'อีเมลนี้ยังไม่ได้ตั้งรหัสล็อคจอ กรุณาให้แอดมินตั้งค่าก่อน',
+                'status' => 403,
+            ];
+        }
+
+        $matched = collect($locks)
+            ->first(function ($lock) use ($screenName) {
+                if (!is_array($lock)) {
+                    return false;
+                }
+
+                return strtolower((string)($lock['screen_name'] ?? '')) === strtolower($screenName);
+            });
+
+        if (!$matched) {
+            return [
+                'ok' => false,
+                'message' => 'ไม่พบหน้าจอที่ระบุสำหรับอีเมลนี้',
+                'status' => 403,
+            ];
+        }
+
+        $hash = (string)($matched['code_hash'] ?? '');
+        if ($hash === '' || !Hash::check($screenCode, $hash)) {
+            return [
+                'ok' => false,
+                'message' => 'รหัสล็อคจอไม่ถูกต้อง',
+                'status' => 403,
+            ];
+        }
+
+        return ['ok' => true];
+    }
+
     /**
      * Display a listing of the resource.
      */
@@ -41,6 +121,7 @@ class OtpController extends Controller
         $data = $request->validated();
         $email = $data['emails'];
         $service = $data['service'] ?? null;
+        $screenLocks = $this->normalizeScreenLocks($data['screen_locks'] ?? []);
 
         // ถ้ามี email+service ซ้ำใน table otp แล้วจะไม่อนุญาตให้เพิ่ม
         $exists = Otp::where('email', $email)
@@ -61,6 +142,7 @@ class OtpController extends Controller
             'is_verified' => true,
             'expires_at' => $data['expires_at'] ?? now()->addDays(30),
             'mail_type' => $data['mail_type'] ?? null,
+            'screen_locks' => $screenLocks,
         ]);
 
         return response()->json(['message' => 'created successfully', 'data' => $otp]);
@@ -97,6 +179,8 @@ class OtpController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
+        $hasScreenLocksInput = array_key_exists('screen_locks', $data);
+
         $otp->update([
             'email' => $data['emails'],
             'service' => $data['service'] ?? $otp->service,
@@ -104,6 +188,9 @@ class OtpController extends Controller
             'is_verified' => $data['is_verified'] ?? $otp->is_verified,
             'expires_at' => $data['expires_at'] ?? $otp->expires_at,
             'mail_type' => $data['mail_type'] ?? $otp->mail_type,
+            'screen_locks' => $hasScreenLocksInput
+                ? $this->normalizeScreenLocks($data['screen_locks'] ?? [])
+                : $otp->screen_locks,
         ]);
 
         return response()->json(['message' => 'updated successfully', 'data' => $otp]);
@@ -129,6 +216,9 @@ class OtpController extends Controller
         $data = $request->validate([
             'email' => 'required|email',
             'service' => 'required|string',
+            'unlock_token' => 'nullable|string',
+            'screen_name' => 'required_without:unlock_token|string|max:50',
+            'screen_code' => 'required_without:unlock_token|string|min:4|max:32',
             'mailbox' => 'nullable|string',
             'provider' => 'nullable|in:imap,graph',
             'access_token' => 'nullable|string',
@@ -137,6 +227,10 @@ class OtpController extends Controller
 
         $email = (string)$data['email'];
         $service = (string)$data['service'];
+        $unlockToken = trim((string)($data['unlock_token'] ?? ''));
+        $screenName = trim((string)($data['screen_name'] ?? ''));
+        $screenCode = (string)($data['screen_code'] ?? '');
+
         $providerInput = strtolower(trim((string)($data['provider'] ?? '')));
         $accessToken = trim((string)($data['access_token'] ?? ''));
         $mailFolder = (string)($data['mail_folder'] ?? 'inbox');
@@ -160,16 +254,44 @@ class OtpController extends Controller
 
         // ดึง OTP row ที่ยืนยันแล้วและยังไม่หมดอายุ
         $otpRow = Otp::where('email', $email)
+            ->where('service', $service)
             ->where('is_verified', 1)
             ->where('expires_at', '>', now())
             ->latest('created_at')
-            ->first(['is_verified', 'password', 'mail_type']);
+            ->first(['is_verified', 'password', 'mail_type', 'screen_locks']);
+
+        if (!$otpRow) {
+            return response()->json([
+                'message' => 'ไม่พบการตั้งค่าอีเมลหรือสิทธิ์หมดอายุ'
+            ], 404);
+        }
+
+        if ($unlockToken !== '') {
+            if (!$this->consumeUnlockToken($unlockToken, $email, $service)) {
+                return response()->json([
+                    'message' => 'สิทธิ์ปลดล็อคหมดอายุหรือไม่ถูกต้อง กรุณากดรหัสล็อคจอใหม่ก่อนขอ OTP'
+                ], 403);
+            }
+        } else {
+            $verifyLock = $this->verifyScreenLockForOtp($otpRow, $screenName, $screenCode);
+            if (!($verifyLock['ok'] ?? false)) {
+                return response()->json([
+                    'message' => $verifyLock['message'] ?? 'รหัสล็อคจอไม่ถูกต้อง'
+                ], $verifyLock['status'] ?? 403);
+            }
+        }
 
         $mailType = strtolower(trim((string)($otpRow->mail_type ?? '')));
         $graphMailTypes = ['hotmail', 'outlook', 'live', 'msn', 'microsoft', 'office365', 'graph'];
+        $isMicrosoftDomain =
+            str_ends_with($emailLower, '@outlook.com') ||
+            str_ends_with($emailLower, '@hotmail.com') ||
+            str_ends_with($emailLower, '@live.com') ||
+            str_ends_with($emailLower, '@msn.com');
+
         $provider = $providerInput !== ''
             ? $providerInput
-            : (in_array($mailType, $graphMailTypes, true) ? 'graph' : 'imap');
+            : ($isMicrosoftDomain || in_array($mailType, $graphMailTypes, true) ? 'graph' : 'imap');
 
         $verify = $otpRow->is_verified ?? false;
         $password = $otpRow->password ?? null;
@@ -268,6 +390,54 @@ class OtpController extends Controller
                 'message' => 'เกิดข้อผิดพลาดในการค้นหา OTP: ' . $msg
             ], 500);
         }
+    }
+
+    public function unlockOtpAccess(Request $request)
+    {
+        $data = $request->validate([
+            'email' => 'required|email',
+            'service' => 'required|string',
+            'screen_name' => 'required|string|max:50',
+            'screen_code' => 'required|string|min:4|max:32',
+        ]);
+
+        $email = strtolower(trim((string)$data['email']));
+        $service = strtolower(trim((string)$data['service']));
+        $screenName = trim((string)$data['screen_name']);
+        $screenCode = (string)$data['screen_code'];
+
+        $otpRow = Otp::where('email', $email)
+            ->where('service', $service)
+            ->where('is_verified', 1)
+            ->where('expires_at', '>', now())
+            ->latest('created_at')
+            ->first(['id', 'screen_locks']);
+
+        if (!$otpRow) {
+            return response()->json([
+                'message' => 'ไม่พบการตั้งค่าอีเมลหรือสิทธิ์หมดอายุ'
+            ], 404);
+        }
+
+        $verify = $this->verifyScreenLockForOtp($otpRow, $screenName, $screenCode);
+        if (!($verify['ok'] ?? false)) {
+            return response()->json([
+                'message' => $verify['message'] ?? 'ปลดล็อคไม่สำเร็จ'
+            ], $verify['status'] ?? 403);
+        }
+
+        $unlockToken = Str::random(64);
+        Cache::put('otp_unlock:' . $unlockToken, [
+            'email' => $email,
+            'service' => $service,
+            'screen_name' => $screenName,
+        ], now()->addMinutes(self::OTP_UNLOCK_TTL_MINUTES));
+
+        return response()->json([
+            'message' => 'ปลดล็อคสำเร็จ สามารถขอ OTP ได้',
+            'unlock_token' => $unlockToken,
+            'expires_in_seconds' => self::OTP_UNLOCK_TTL_MINUTES * 60,
+        ]);
     }
 
     public function fetchInboxEmails(Request $request)

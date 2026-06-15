@@ -80,7 +80,7 @@ class ImapOtpService
         }
         $serviceLower = mb_strtolower($service);
         $debugSubjects = [];
-        $maxSearch = 20; // จำกัดวนหา 10 ฉบับล่าสุด
+        $maxSearch = 1; // จำกัดวนหา 10 ฉบับล่าสุด
         $start = max($numMessages - $maxSearch + 1, 1);
         for ($i = $numMessages; $i >= $start; $i--) {
             $overview = imap_fetch_overview($inbox, $i, 0);

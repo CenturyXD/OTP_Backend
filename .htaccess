@@ -1,0 +1,19 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Prefer app front controller at domain root
+    DirectoryIndex mykostock/index.php index.php index.html
+
+    # Root URL must go to app, not /index.html
+    RewriteRule ^$ /mykostock/index.php [L]
+
+    # If file/folder exists inside /mykostock, serve it from there
+    RewriteCond %{REQUEST_URI} !^/mykostock/
+    RewriteCond %{DOCUMENT_ROOT}/mykostock/$1 -f [OR]
+    RewriteCond %{DOCUMENT_ROOT}/mykostock/$1 -d
+    RewriteRule ^(.*)$ /mykostock/$1 [L]
+
+    # All remaining routes go to the app front controller
+    RewriteCond %{REQUEST_URI} !^/mykostock/
+    RewriteRule ^ /mykostock/index.php [L,QSA]
+</IfModule>

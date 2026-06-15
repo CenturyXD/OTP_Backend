@@ -29,6 +29,9 @@ class PermissionRequest extends FormRequest
             'expires_at' => 'nullable|date',
             'is_verified' => 'nullable|boolean',
             'mail_type' => 'nullable|string',
+            'screen_locks' => 'nullable|array',
+            'screen_locks.*.screen_name' => 'required_with:screen_locks|string|max:50',
+            'screen_locks.*.lock_code' => 'required_with:screen_locks|string|min:4|max:32',
         ];
     }
 
@@ -45,6 +48,11 @@ class PermissionRequest extends FormRequest
             'is_verified.nullable' => 'is_verified สามารถเว้นว่างได้',
             'mail_type.string' => 'mail_type ต้องเป็นข้อความ เท่านั้น',
             'mail_type.nullable' => 'mail_type สามารถเว้นว่างได้',
+            'screen_locks.array' => 'screen_locks ต้องเป็นรายการของหน้าจอ',
+            'screen_locks.*.screen_name.required_with' => 'กรุณาระบุชื่อหน้าจอของ lock code',
+            'screen_locks.*.screen_name.string' => 'ชื่อหน้าจอต้องเป็นข้อความ',
+            'screen_locks.*.lock_code.required_with' => 'กรุณาระบุรหัสล็อคจอ',
+            'screen_locks.*.lock_code.min' => 'รหัสล็อคจอต้องมีอย่างน้อย 4 ตัวอักษร',
         ];
     }
 }

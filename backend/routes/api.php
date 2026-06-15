@@ -17,6 +17,7 @@ Route::post('/info/{id}', [AuthController::class, 'info']);
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 // Route::apiResource('/otp', OtpController::class);
+Route::post('/otp/unlock', [OtpController::class, 'unlockOtpAccess']);
 Route::post('/otp/fetch', [OtpController::class, 'fetchOtp']);
 Route::post('/inbox/emails', [OtpController::class, 'fetchInboxEmails']);
 
