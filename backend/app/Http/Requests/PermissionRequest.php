@@ -33,6 +33,9 @@ class PermissionRequest extends FormRequest
             'screen_locks.*.screen_name' => 'required_with:screen_locks|string|max:50',
             'screen_locks.*.lock_code' => 'required_with:screen_locks|string|min:4|max:32',
             'refresh_token' => 'nullable|string',
+            'oauth_client_id' => 'nullable|string',
+            'oauth_client_secret' => 'nullable|string',
+            'oauth_tenant_id' => 'nullable|string',
         ];
     }
 

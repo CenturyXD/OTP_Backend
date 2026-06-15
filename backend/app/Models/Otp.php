@@ -18,6 +18,9 @@ class Otp extends Model
         'mail_type',
         'screen_locks',
         'refresh_token',
+        'oauth_client_id',
+        'oauth_client_secret',
+        'oauth_tenant_id',
     ];
 
     protected $casts = [
@@ -27,6 +30,7 @@ class Otp extends Model
 
     protected $hidden = [
         'refresh_token',
+        'oauth_client_secret',
     ];
 
     protected $appends = [

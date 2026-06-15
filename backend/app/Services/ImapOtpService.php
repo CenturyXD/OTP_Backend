@@ -45,9 +45,10 @@ class ImapOtpService
     /**
      * ดึง OTP ล่าสุดจากกล่องเมลที่ subject/body มีชื่อ service
      */
-    public function fetchLatestOtpFromInbox($email, $password, $service, $mailbox = '{imap.gmail.com:993/imap/ssl}INBOX')
+    public function fetchLatestOtpFromInbox($email, $password, $service, $mailbox = '{imap.gmail.com:993/imap/ssl}INBOX', $forwardedTargetEmail = null)
     {
         $mailbox = $this->normalizeMailbox($mailbox);
+        $forwardedTargetEmail = strtolower(trim((string)$forwardedTargetEmail));
         $inbox = @imap_open($mailbox, $email, $password);
         if (!$inbox) {
             $imapErrors = imap_errors() ?: [];
@@ -80,7 +81,7 @@ class ImapOtpService
         }
         $serviceLower = mb_strtolower($service);
         $debugSubjects = [];
-        $maxSearch = 1; // จำกัดวนหา 10 ฉบับล่าสุด
+        $maxSearch = 10; // จำกัดวนหา 10 ฉบับล่าสุด
         $start = max($numMessages - $maxSearch + 1, 1);
         for ($i = $numMessages; $i >= $start; $i--) {
             $overview = imap_fetch_overview($inbox, $i, 0);
@@ -91,18 +92,6 @@ class ImapOtpService
                 'subject' => $subject,
                 'from' => $from
             ];
-            $match = false;
-            if ($serviceLower === 'netflix') {
-                // Netflix: บางเมล subject เป็นภาษาไทยล้วน จึงต้องเช็ค from ด้วย
-                $match = (mb_stripos($subject, 'netflix') !== false) || (mb_stripos($from, 'netflix') !== false);
-            } elseif ($serviceLower === 'disney+' || $serviceLower === 'disney') {
-                // Disney+: match เฉพาะ from หรือ subject มี disney
-                $match = (mb_stripos($from, 'disney') !== false) || (mb_stripos($subject, 'disney') !== false);
-            } else {
-                // อื่นๆ: match ทั้ง subject และ from
-                $match = ($serviceLower && (mb_stripos($subject, $serviceLower) !== false || mb_stripos($from, $serviceLower) !== false));
-            }
-            if (!$match) continue;
             $date = $overview[0]->date ?? '';
             $structure = imap_fetchstructure($inbox, $i);
             $parts = $this->getAllTextParts($inbox, $i, $structure);
@@ -116,7 +105,19 @@ class ImapOtpService
                 }
             }
             $body = trim($plainText) !== '' ? trim($plainText) : trim($htmlText);
+
+            // กรณีดึงจากเมลกลาง: ต้องเป็นเมลที่มีหลักฐานว่า forward มาจาก target email ที่ร้องขอ
+            if ($forwardedTargetEmail !== '') {
+                $searchArea = strtolower($subject . "\n" . $from . "\n" . $body);
+                if (strpos($searchArea, $forwardedTargetEmail) === false) {
+                    continue;
+                }
+            }
+
             $otp = $this->extractOtp($body);
+            if (!$otp && $forwardedTargetEmail !== '') {
+                $otp = $this->extractOtpFromRawMessage($inbox, $i);
+            }
             if ($otp) {
                 imap_close($inbox);
                 return [
@@ -126,6 +127,26 @@ class ImapOtpService
                     'date' => $date,
                 ];
             }
+
+            $match = false;
+            if ($serviceLower === 'netflix') {
+                // รองรับเมล forward ที่ subject/from เปลี่ยน แต่ body ยังมี netflix
+                $match = (mb_stripos($subject, 'netflix') !== false)
+                    || (mb_stripos($from, 'netflix') !== false)
+                    || (mb_stripos($body, 'netflix') !== false);
+            } elseif ($serviceLower === 'disney+' || $serviceLower === 'disney') {
+                // Disney+ มักอยู่ใน body เมื่อถูก forward
+                $match = (mb_stripos($from, 'disney') !== false)
+                    || (mb_stripos($subject, 'disney') !== false)
+                    || (mb_stripos($body, 'disney') !== false);
+            } else {
+                $match = ($serviceLower && (
+                    mb_stripos($subject, $serviceLower) !== false
+                    || mb_stripos($from, $serviceLower) !== false
+                    || mb_stripos($body, $serviceLower) !== false
+                ));
+            }
+            if (!$match) continue;
         }
         imap_close($inbox);
         // ส่ง subject+from ทั้งหมดกลับมาด้วยถ้าไม่พบ OTP เพื่อ debug
@@ -133,6 +154,27 @@ class ImapOtpService
             'otp' => null,
             'debug_subjects' => $debugSubjects,
         ];
+    }
+
+    /**
+     * Fallback สำหรับเมล forward ที่ OTP อาจอยู่ใน source ดิบ
+     */
+    private function extractOtpFromRawMessage($inbox, int $msgNumber): ?string
+    {
+        $header = (string)imap_fetchheader($inbox, $msgNumber);
+        $body = (string)imap_body($inbox, $msgNumber);
+        $raw = $this->normalizeBody($header . "\n" . $body);
+
+        $keywordPattern = '(?:otp|one\s*time|verification|verify|security|passcode|pin|code|รหัส|ยืนยัน)';
+
+        if (
+            preg_match('/' . $keywordPattern . '\\D{0,40}(\\d{4,8})/iu', $raw, $matches) ||
+            preg_match('/(\\d{4,8})\\D{0,40}' . $keywordPattern . '/iu', $raw, $matches)
+        ) {
+            return (string)$matches[1];
+        }
+
+        return null;
     }
 
     /**

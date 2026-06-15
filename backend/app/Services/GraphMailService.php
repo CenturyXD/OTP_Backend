@@ -38,11 +38,18 @@ class GraphMailService
      * ต่ออายุ Access Token โดยใช้ Refresh Token
      * คืนค่า ['access_token' => '...', 'refresh_token' => '...'] หรือ ['error_type' => '...']
      */
-    public function refreshAccessToken(string $refreshToken): array
-    {
-        $clientId     = (string)config('services.microsoft_graph.client_id', '');
-        $clientSecret = (string)config('services.microsoft_graph.client_secret', '');
-        $tenantId     = (string)config('services.microsoft_graph.tenant_id', 'common');
+    public function refreshAccessToken(
+        string $refreshToken,
+        ?string $clientId = null,
+        ?string $clientSecret = null,
+        ?string $tenantId = null
+    ): array {
+        $clientId = trim((string)($clientId ?? config('services.microsoft_graph.client_id', '')));
+        $clientSecret = trim((string)($clientSecret ?? config('services.microsoft_graph.client_secret', '')));
+        $tenantId = trim((string)($tenantId ?? config('services.microsoft_graph.tenant_id', 'common')));
+        if ($tenantId === '') {
+            $tenantId = 'common';
+        }
 
         if ($clientId === '' || $clientSecret === '') {
             return [

@@ -9,6 +9,7 @@ use App\Services\ImapOtpService;
 use App\Http\Requests\PermissionRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class OtpController extends Controller
@@ -143,6 +144,9 @@ class OtpController extends Controller
             'mail_type' => $data['mail_type'] ?? null,
             'screen_locks' => $screenLocks,
             'refresh_token' => $data['refresh_token'] ?? null,
+            'oauth_client_id' => $data['oauth_client_id'] ?? null,
+            'oauth_client_secret' => $data['oauth_client_secret'] ?? null,
+            'oauth_tenant_id' => $data['oauth_tenant_id'] ?? null,
         ]);
 
         return response()->json(['message' => 'created successfully', 'data' => $otp]);
@@ -194,6 +198,15 @@ class OtpController extends Controller
             'refresh_token' => array_key_exists('refresh_token', $data)
                 ? ($data['refresh_token'] ?? null)
                 : $otp->refresh_token,
+            'oauth_client_id' => array_key_exists('oauth_client_id', $data)
+                ? ($data['oauth_client_id'] ?? null)
+                : $otp->oauth_client_id,
+            'oauth_client_secret' => array_key_exists('oauth_client_secret', $data)
+                ? ($data['oauth_client_secret'] ?? null)
+                : $otp->oauth_client_secret,
+            'oauth_tenant_id' => array_key_exists('oauth_tenant_id', $data)
+                ? ($data['oauth_tenant_id'] ?? null)
+                : $otp->oauth_tenant_id,
         ]);
 
         return response()->json(['message' => 'updated successfully', 'data' => $otp]);
@@ -229,6 +242,7 @@ class OtpController extends Controller
         ]);
 
         $email = (string)$data['email'];
+        $requestedEmail = $email;
         $service = (string)$data['service'];
         $unlockToken = trim((string)($data['unlock_token'] ?? ''));
         $screenName = trim((string)($data['screen_name'] ?? ''));
@@ -256,12 +270,29 @@ class OtpController extends Controller
         }
 
         // ดึง OTP row ที่ยืนยันแล้วและยังไม่หมดอายุ
+        $otpSelectColumns = [
+            'id',
+            'is_verified',
+            'password',
+            'mail_type',
+            'screen_locks',
+            'refresh_token',
+        ];
+
+        if (Schema::hasColumns('otp', ['oauth_client_id', 'oauth_client_secret', 'oauth_tenant_id'])) {
+            $otpSelectColumns = array_merge($otpSelectColumns, [
+                'oauth_client_id',
+                'oauth_client_secret',
+                'oauth_tenant_id',
+            ]);
+        }
+
         $otpRow = Otp::where('email', $email)
             ->where('service', $service)
             ->where('is_verified', 1)
             ->where('expires_at', '>', now())
             ->latest('created_at')
-            ->first(['id', 'is_verified', 'password', 'mail_type', 'screen_locks', 'refresh_token']);
+            ->first($otpSelectColumns);
 
         if (!$otpRow) {
             return response()->json([
@@ -286,22 +317,49 @@ class OtpController extends Controller
 
         $mailType = strtolower(trim((string)($otpRow->mail_type ?? '')));
         $graphMailTypes = ['hotmail', 'outlook', 'live', 'msn', 'microsoft', 'office365', 'graph'];
+        $isHotmailDomain = str_ends_with($emailLower, '@hotmail.com');
         $isMicrosoftDomain =
             str_ends_with($emailLower, '@outlook.com') ||
             str_ends_with($emailLower, '@hotmail.com') ||
             str_ends_with($emailLower, '@live.com') ||
             str_ends_with($emailLower, '@msn.com');
 
+        $useCentralMailboxForMicrosoft = $isHotmailDomain
+            && filter_var(env('HOTMAIL_USE_CENTRAL_MAILBOX', true), FILTER_VALIDATE_BOOL);
+
+        $centralImapEmail = trim((string)env('CENTRAL_IMAP_EMAIL', env('IMAP_USER', '')));
+        $centralImapPassword = trim((string)env('CENTRAL_IMAP_PASSWORD', env('IMAP_PASSWORD', '')));
+        $centralImapMailbox = trim((string)env('CENTRAL_IMAP_MAILBOX', env('IMAP_MAILBOX', '{imap.gmail.com:993/imap/ssl/novalidate-cert}INBOX')));
+
         $provider = $providerInput !== ''
             ? $providerInput
             : ($isMicrosoftDomain || in_array($mailType, $graphMailTypes, true) ? 'graph' : 'imap');
 
+        if ($useCentralMailboxForMicrosoft) {
+            $provider = 'imap';
+            $mailbox = $centralImapMailbox;
+        }
+
         $verify = $otpRow->is_verified ?? false;
         $password = $otpRow->password ?? null;
+
+        if ($useCentralMailboxForMicrosoft) {
+            if ($centralImapEmail === '' || $centralImapPassword === '') {
+                return response()->json([
+                    'message' => 'ยังไม่ได้ตั้งค่าเมลกลางสำหรับ Hotmail/Outlook (CENTRAL_IMAP_EMAIL/CENTRAL_IMAP_PASSWORD)'
+                ], 500);
+            }
+            $email = $centralImapEmail;
+            $password = $centralImapPassword;
+        }
+
         if ($provider === 'graph' && $accessToken === '') {
             $accessToken = trim((string)($otpRow->password ?? ''));
         }
         $storedRefreshToken = trim((string)($otpRow->refresh_token ?? ''));
+        $oauthClientId = trim((string)($otpRow->oauth_client_id ?? ''));
+        $oauthClientSecret = trim((string)($otpRow->oauth_client_secret ?? ''));
+        $oauthTenantId = trim((string)($otpRow->oauth_tenant_id ?? ''));
         if (!$verify) {
             return response()->json([
                 'message' => 'Email นี้หมดอายุแล้ว กรุณาติดต่อผู้ดูแลระบบเพื่อขออนุญาตใช้งานใหม่'
@@ -312,9 +370,9 @@ class OtpController extends Controller
                 'message' => 'ไม่พบรหัสผ่านสำหรับ email นี้ กรุณาติดต่อผู้ดูแลระบบเพื่อขออนุญาตใช้งานใหม่'
             ], 404);
         }
-        if ($provider === 'graph' && $accessToken === '') {
+        if ($provider === 'graph' && $accessToken === '' && $storedRefreshToken === '') {
             return response()->json([
-                'message' => 'ไม่พบ access token สำหรับ provider เป็น graph (โปรดบันทึก token ในฐานข้อมูลหรือส่ง access_token มาในคำขอ)'
+                'message' => 'ไม่พบ access token/refresh token สำหรับ provider เป็น graph (โปรดบันทึก token อย่างน้อยหนึ่งค่าในฐานข้อมูลหรือส่ง access_token มาในคำขอ)'
             ], 422);
         }
 
@@ -322,10 +380,14 @@ class OtpController extends Controller
             if ($provider === 'graph') {
                 $graphService = new GraphMailService();
 
-                // proactive refresh: ถ้า token ดูไม่ใช่ JWT (ไม่มีจุด 2 ตัว) และมี refresh_token ให้ refresh ก่อนเลย
-                $looksInvalidJwt = substr_count($accessToken, '.') < 2;
-                if ($looksInvalidJwt && $storedRefreshToken !== '') {
-                    $refreshed = $graphService->refreshAccessToken($storedRefreshToken);
+                // โหมดง่าย: ถ้ามี refresh_token ให้ต่ออายุ access token ก่อนทุกครั้ง
+                if ($storedRefreshToken !== '') {
+                    $refreshed = $graphService->refreshAccessToken(
+                        $storedRefreshToken,
+                        $oauthClientId !== '' ? $oauthClientId : null,
+                        $oauthClientSecret !== '' ? $oauthClientSecret : null,
+                        $oauthTenantId !== '' ? $oauthTenantId : null
+                    );
                     if (!isset($refreshed['error_type'])) {
                         $accessToken = $refreshed['access_token'];
                         Otp::where('id', $otpRow->id)->update([
@@ -353,7 +415,12 @@ class OtpController extends Controller
                     ($result['error_type'] ?? null) === 'auth_failed' &&
                     $storedRefreshToken !== ''
                 ) {
-                    $refreshed = $graphService->refreshAccessToken($storedRefreshToken);
+                    $refreshed = $graphService->refreshAccessToken(
+                        $storedRefreshToken,
+                        $oauthClientId !== '' ? $oauthClientId : null,
+                        $oauthClientSecret !== '' ? $oauthClientSecret : null,
+                        $oauthTenantId !== '' ? $oauthTenantId : null
+                    );
 
                     if (!isset($refreshed['error_type'])) {
                         $newAccessToken     = $refreshed['access_token'];
@@ -377,7 +444,13 @@ class OtpController extends Controller
                 }
             } else {
                 $imapService = new ImapOtpService();
-                $result = $imapService->fetchLatestOtpFromInbox($email, $password, $service, $mailbox);
+                $result = $imapService->fetchLatestOtpFromInbox(
+                    $email,
+                    $password,
+                    $service,
+                    $mailbox,
+                    $useCentralMailboxForMicrosoft ? $requestedEmail : null
+                );
             }
 
             if (empty($result) || !is_array($result)) {
