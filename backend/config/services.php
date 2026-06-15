@@ -36,7 +36,10 @@ return [
     ],
 
     'microsoft_graph' => [
-        'base_url' => env('MICROSOFT_GRAPH_BASE_URL', 'https://graph.microsoft.com/v1.0'),
+        'base_url'      => env('MICROSOFT_GRAPH_BASE_URL', 'https://graph.microsoft.com/v1.0'),
+        'client_id'     => env('MICROSOFT_CLIENT_ID'),
+        'client_secret' => env('MICROSOFT_CLIENT_SECRET'),
+        'tenant_id'     => env('MICROSOFT_TENANT_ID', 'common'),
     ],
 
 ];

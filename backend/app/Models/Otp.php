@@ -17,6 +17,7 @@ class Otp extends Model
         'owner',
         'mail_type',
         'screen_locks',
+        'refresh_token',
     ];
 
     protected $casts = [
@@ -25,7 +26,8 @@ class Otp extends Model
     ];
 
     protected $hidden = [
-        'screen_locks',
+        'refresh_token',
+        'password',
     ];
 
     protected $appends = [

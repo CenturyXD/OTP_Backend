@@ -34,6 +34,54 @@ class GraphMailService
         return rtrim((string)config('services.microsoft_graph.base_url', self::DEFAULT_BASE_URL), '/');
     }
 
+    /**
+     * ต่ออายุ Access Token โดยใช้ Refresh Token
+     * คืนค่า ['access_token' => '...', 'refresh_token' => '...'] หรือ ['error_type' => '...']
+     */
+    public function refreshAccessToken(string $refreshToken): array
+    {
+        $clientId     = (string)config('services.microsoft_graph.client_id', '');
+        $clientSecret = (string)config('services.microsoft_graph.client_secret', '');
+        $tenantId     = (string)config('services.microsoft_graph.tenant_id', 'common');
+
+        if ($clientId === '' || $clientSecret === '') {
+            return [
+                'error_type'    => 'config_missing',
+                'error_message' => 'ไม่พบ MICROSOFT_CLIENT_ID หรือ MICROSOFT_CLIENT_SECRET ใน .env',
+            ];
+        }
+
+        $url = "https://login.microsoftonline.com/{$tenantId}/oauth2/v2.0/token";
+
+        $response = Http::asForm()->timeout(20)->post($url, [
+            'client_id'     => $clientId,
+            'client_secret' => $clientSecret,
+            'grant_type'    => 'refresh_token',
+            'refresh_token' => $refreshToken,
+            'scope'         => 'https://graph.microsoft.com/Mail.Read offline_access',
+        ]);
+
+        if ($response->successful()) {
+            $body = $response->json();
+            return [
+                'access_token'  => (string)($body['access_token']  ?? ''),
+                'refresh_token' => (string)($body['refresh_token'] ?? $refreshToken),
+                'expires_in'    => (int)($body['expires_in'] ?? 3600),
+            ];
+        }
+
+        $errorDesc = (string)($response->json()['error_description'] ?? '');
+        $errorCode = (string)($response->json()['error'] ?? '');
+        $errorType = in_array($errorCode, ['invalid_grant', 'interaction_required'], true)
+            ? 'refresh_token_expired'
+            : 'auth_failed';
+
+        return [
+            'error_type'    => $errorType,
+            'error_message' => $errorDesc ?: ('Token refresh failed with status ' . $response->status()),
+        ];
+    }
+
     private function graphGet(string $path, string $accessToken, array $query = []): array
     {
         $response = Http::withToken($accessToken)

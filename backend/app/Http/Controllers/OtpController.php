@@ -9,7 +9,6 @@ use App\Services\ImapOtpService;
 use App\Http\Requests\PermissionRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 class OtpController extends Controller
@@ -30,7 +29,7 @@ class OtpController extends Controller
 
                 return [
                     'screen_name' => $screenName,
-                    'code_hash' => Hash::make($code),
+                    'lock_code' => $code,
                 ];
             })
             ->filter()
@@ -79,8 +78,8 @@ class OtpController extends Controller
             ];
         }
 
-        $hash = (string)($matched['code_hash'] ?? '');
-        if ($hash === '' || !Hash::check($screenCode, $hash)) {
+        $storedCode = (string)($matched['lock_code'] ?? '');
+        if ($storedCode === '' || $storedCode !== $screenCode) {
             return [
                 'ok' => false,
                 'message' => 'รหัสล็อคจอไม่ถูกต้อง',
@@ -143,6 +142,7 @@ class OtpController extends Controller
             'expires_at' => $data['expires_at'] ?? now()->addDays(30),
             'mail_type' => $data['mail_type'] ?? null,
             'screen_locks' => $screenLocks,
+            'refresh_token' => $data['refresh_token'] ?? null,
         ]);
 
         return response()->json(['message' => 'created successfully', 'data' => $otp]);
@@ -191,6 +191,9 @@ class OtpController extends Controller
             'screen_locks' => $hasScreenLocksInput
                 ? $this->normalizeScreenLocks($data['screen_locks'] ?? [])
                 : $otp->screen_locks,
+            'refresh_token' => array_key_exists('refresh_token', $data)
+                ? ($data['refresh_token'] ?? null)
+                : $otp->refresh_token,
         ]);
 
         return response()->json(['message' => 'updated successfully', 'data' => $otp]);
@@ -258,7 +261,7 @@ class OtpController extends Controller
             ->where('is_verified', 1)
             ->where('expires_at', '>', now())
             ->latest('created_at')
-            ->first(['is_verified', 'password', 'mail_type', 'screen_locks']);
+            ->first(['id', 'is_verified', 'password', 'mail_type', 'screen_locks', 'refresh_token']);
 
         if (!$otpRow) {
             return response()->json([
@@ -298,6 +301,7 @@ class OtpController extends Controller
         if ($provider === 'graph' && $accessToken === '') {
             $accessToken = trim((string)($otpRow->password ?? ''));
         }
+        $storedRefreshToken = trim((string)($otpRow->refresh_token ?? ''));
         if (!$verify) {
             return response()->json([
                 'message' => 'Email นี้หมดอายุแล้ว กรุณาติดต่อผู้ดูแลระบบเพื่อขออนุญาตใช้งานใหม่'
@@ -317,7 +321,60 @@ class OtpController extends Controller
         try {
             if ($provider === 'graph') {
                 $graphService = new GraphMailService();
+
+                // proactive refresh: ถ้า token ดูไม่ใช่ JWT (ไม่มีจุด 2 ตัว) และมี refresh_token ให้ refresh ก่อนเลย
+                $looksInvalidJwt = substr_count($accessToken, '.') < 2;
+                if ($looksInvalidJwt && $storedRefreshToken !== '') {
+                    $refreshed = $graphService->refreshAccessToken($storedRefreshToken);
+                    if (!isset($refreshed['error_type'])) {
+                        $accessToken = $refreshed['access_token'];
+                        Otp::where('id', $otpRow->id)->update([
+                            'password'      => $accessToken,
+                            'refresh_token' => $refreshed['refresh_token'],
+                        ]);
+                    } elseif (($refreshed['error_type'] ?? '') === 'refresh_token_expired') {
+                        return response()->json([
+                            'message' => 'Refresh token หมดอายุหรือถูกยกเลิก กรุณาล็อกอิน Microsoft ใหม่และอัปเดต token ในระบบ',
+                            'error_type' => 'refresh_token_expired',
+                        ], 401);
+                    } elseif (($refreshed['error_type'] ?? '') === 'config_missing') {
+                        return response()->json([
+                            'message' => $refreshed['error_message'],
+                            'error_type' => 'config_missing',
+                        ], 500);
+                    }
+                }
+
                 $result = $graphService->fetchLatestOtpFromInbox($accessToken, $service, $mailFolder);
+
+                // ถ้า auth_failed และมี refresh_token ให้ลอง refresh แล้วยิงซ้ำ
+                if (
+                    is_array($result) &&
+                    ($result['error_type'] ?? null) === 'auth_failed' &&
+                    $storedRefreshToken !== ''
+                ) {
+                    $refreshed = $graphService->refreshAccessToken($storedRefreshToken);
+
+                    if (!isset($refreshed['error_type'])) {
+                        $newAccessToken     = $refreshed['access_token'];
+                        $newRefreshToken    = $refreshed['refresh_token'];
+
+                        // บันทึก token ใหม่กลับเข้า DB ทันที
+                        Otp::where('id', $otpRow->id)->update([
+                            'password'      => $newAccessToken,
+                            'refresh_token' => $newRefreshToken,
+                        ]);
+
+                        // ยิงซ้ำด้วย access_token ใหม่
+                        $result = $graphService->fetchLatestOtpFromInbox($newAccessToken, $service, $mailFolder);
+                        $accessToken = $newAccessToken;
+                    } elseif (($refreshed['error_type'] ?? '') === 'refresh_token_expired') {
+                        return response()->json([
+                            'message' => 'Refresh token หมดอายุหรือถูกยกเลิก กรุณาล็อกอิน Microsoft ใหม่และอัปเดต token ในระบบ',
+                            'error_type' => 'refresh_token_expired',
+                        ], 401);
+                    }
+                }
             } else {
                 $imapService = new ImapOtpService();
                 $result = $imapService->fetchLatestOtpFromInbox($email, $password, $service, $mailbox);

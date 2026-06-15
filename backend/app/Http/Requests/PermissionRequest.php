@@ -32,6 +32,7 @@ class PermissionRequest extends FormRequest
             'screen_locks' => 'nullable|array',
             'screen_locks.*.screen_name' => 'required_with:screen_locks|string|max:50',
             'screen_locks.*.lock_code' => 'required_with:screen_locks|string|min:4|max:32',
+            'refresh_token' => 'nullable|string',
         ];
     }
 
