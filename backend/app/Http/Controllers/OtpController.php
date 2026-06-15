@@ -91,6 +91,17 @@ class OtpController extends Controller
         return ['ok' => true];
     }
 
+    private function buildMailboxWithFolder(string $mailbox, string $folder): string
+    {
+        $folder = trim($folder);
+        if ($folder === '') {
+            return $mailbox;
+        }
+
+        $rewritten = preg_replace('/\}.*$/', '}' . $folder, $mailbox, 1);
+        return is_string($rewritten) && $rewritten !== '' ? $rewritten : $mailbox;
+    }
+
     /**
      * Display a listing of the resource.
      */
@@ -330,6 +341,17 @@ class OtpController extends Controller
         $centralImapEmail = trim((string)env('CENTRAL_IMAP_EMAIL', env('IMAP_USER', '')));
         $centralImapPassword = trim((string)env('CENTRAL_IMAP_PASSWORD', env('IMAP_PASSWORD', '')));
         $centralImapMailbox = trim((string)env('CENTRAL_IMAP_MAILBOX', env('IMAP_MAILBOX', '{imap.gmail.com:993/imap/ssl/novalidate-cert}INBOX')));
+        $centralImapFolders = array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string)env('CENTRAL_IMAP_FOLDERS', 'INBOX,Spam,[Gmail]/Spam,Junk'))
+        )));
+        if (empty($centralImapFolders)) {
+            $centralImapFolders = ['INBOX'];
+        }
+        $centralImapMailboxes = array_map(
+            fn(string $folder) => $this->buildMailboxWithFolder($centralImapMailbox, $folder),
+            $centralImapFolders
+        );
 
         $provider = $providerInput !== ''
             ? $providerInput
@@ -337,7 +359,7 @@ class OtpController extends Controller
 
         if ($useCentralMailboxForMicrosoft) {
             $provider = 'imap';
-            $mailbox = $centralImapMailbox;
+            $mailbox = $centralImapMailboxes[0] ?? $centralImapMailbox;
         }
 
         $verify = $otpRow->is_verified ?? false;
@@ -444,13 +466,23 @@ class OtpController extends Controller
                 }
             } else {
                 $imapService = new ImapOtpService();
-                $result = $imapService->fetchLatestOtpFromInbox(
-                    $email,
-                    $password,
-                    $service,
-                    $mailbox,
-                    $useCentralMailboxForMicrosoft ? $requestedEmail : null
-                );
+                if ($useCentralMailboxForMicrosoft) {
+                    $result = $imapService->fetchLatestOtpFromMailboxes(
+                        $email,
+                        $password,
+                        $service,
+                        $centralImapMailboxes,
+                        $requestedEmail
+                    );
+                } else {
+                    $result = $imapService->fetchLatestOtpFromInbox(
+                        $email,
+                        $password,
+                        $service,
+                        $mailbox,
+                        null
+                    );
+                }
             }
 
             if (empty($result) || !is_array($result)) {

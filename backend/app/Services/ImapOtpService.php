@@ -42,6 +42,69 @@ class ImapOtpService
         return $mailbox;
     }
 
+    private function withMailboxFolder(string $mailbox, string $folder): string
+    {
+        $folder = trim($folder);
+        if ($folder === '') {
+            return $mailbox;
+        }
+
+        $rewritten = preg_replace('/\}.*$/', '}' . $folder, $mailbox, 1);
+        return is_string($rewritten) && $rewritten !== '' ? $rewritten : $mailbox;
+    }
+
+    public function fetchLatestOtpFromMailboxes($email, $password, $service, array $mailboxes, $forwardedTargetEmail = null)
+    {
+        $bestResult = null;
+        $bestTimestamp = 0;
+        $lastError = null;
+        $combinedDebugSubjects = [];
+
+        foreach ($mailboxes as $mailbox) {
+            $result = $this->fetchLatestOtpFromInbox($email, $password, $service, $mailbox, $forwardedTargetEmail);
+
+            if (!is_array($result)) {
+                continue;
+            }
+
+            if (!empty($result['error_type'])) {
+                $lastError = $result;
+                continue;
+            }
+
+            if (!empty($result['debug_subjects']) && is_array($result['debug_subjects'])) {
+                $combinedDebugSubjects = array_merge($combinedDebugSubjects, $result['debug_subjects']);
+            }
+
+            if (empty($result['otp'])) {
+                continue;
+            }
+
+            $timestamp = strtotime((string)($result['date'] ?? '')) ?: 0;
+            if ($bestResult === null || $timestamp >= $bestTimestamp) {
+                $bestResult = $result;
+                $bestTimestamp = $timestamp;
+            }
+        }
+
+        if ($bestResult !== null) {
+            if (!empty($combinedDebugSubjects)) {
+                $bestResult['debug_subjects'] = $combinedDebugSubjects;
+            }
+
+            return $bestResult;
+        }
+
+        if ($lastError !== null) {
+            return $lastError;
+        }
+
+        return [
+            'otp' => null,
+            'debug_subjects' => $combinedDebugSubjects,
+        ];
+    }
+
     /**
      * ดึง OTP ล่าสุดจากกล่องเมลที่ subject/body มีชื่อ service
      */
