@@ -27,7 +27,6 @@ class Otp extends Model
 
     protected $hidden = [
         'refresh_token',
-        'password',
     ];
 
     protected $appends = [
