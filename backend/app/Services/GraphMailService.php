@@ -188,6 +188,47 @@ class GraphMailService
         return array_map(fn(array $message) => $this->normalizeMessage($message), $messages);
     }
 
+    public function fetchLatestOtpFromFolders(string $accessToken, string $service, array $folders = ['inbox', 'junkemail'], int $maxSearch = 20): array
+    {
+        $bestResult = null;
+        $bestTimestamp = 0;
+        $lastError = null;
+        $combinedDebugSubjects = [];
+
+        foreach ($folders as $folder) {
+            $result = $this->fetchLatestOtpFromInbox($accessToken, $service, $folder, $maxSearch);
+
+            if (!is_array($result)) {
+                continue;
+            }
+            if (!empty($result['error_type'])) {
+                $lastError = $result;
+                continue;
+            }
+            if (!empty($result['debug_subjects'])) {
+                $combinedDebugSubjects = array_merge($combinedDebugSubjects, $result['debug_subjects']);
+            }
+            if (empty($result['otp'])) {
+                continue;
+            }
+
+            $timestamp = strtotime((string)($result['date'] ?? '')) ?: 0;
+            if ($bestResult === null || $timestamp >= $bestTimestamp) {
+                $bestResult = $result;
+                $bestTimestamp = $timestamp;
+            }
+        }
+
+        if ($bestResult !== null) {
+            if (!empty($combinedDebugSubjects)) {
+                $bestResult['debug_subjects'] = $combinedDebugSubjects;
+            }
+            return $bestResult;
+        }
+
+        return $lastError ?? ['otp' => null, 'debug_subjects' => $combinedDebugSubjects];
+    }
+
     public function fetchLatestOtpFromInbox(string $accessToken, string $service, string $mailFolder = 'inbox', int $maxSearch = 20): array
     {
         $emails = $this->fetchInboxEmails($maxSearch, $accessToken, $mailFolder);

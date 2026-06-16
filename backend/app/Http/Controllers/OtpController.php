@@ -9,12 +9,12 @@ use App\Services\ImapOtpService;
 use App\Http\Requests\PermissionRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class OtpController extends Controller
 {
     private const OTP_UNLOCK_TTL_MINUTES = 5;
+    private const MICROSOFT_DOMAINS = ['@outlook.com', '@hotmail.com', '@live.com', '@msn.com'];
 
     private function normalizeScreenLocks(array $locks): array
     {
@@ -101,6 +101,64 @@ class OtpController extends Controller
         $rewritten = preg_replace('/\}.*$/', '}' . $folder, $mailbox, 1);
         return is_string($rewritten) && $rewritten !== '' ? $rewritten : $mailbox;
     }
+
+    private function isMicrosoftDomain(string $emailLower): bool
+    {
+        foreach (self::MICROSOFT_DOMAINS as $domain) {
+            if (str_ends_with($emailLower, $domain)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function resolveDefaultMailbox(string $emailLower): string
+    {
+        if (str_ends_with($emailLower, '@gmail.com')) {
+            return '{imap.gmail.com:993/imap/ssl/novalidate-cert}INBOX';
+        }
+        return (string)env('IMAP_MAILBOX', '{imap.gmail.com:993/imap/ssl/novalidate-cert}INBOX');
+    }
+
+    private function buildImapMailboxesForEmail(string $emailLower, string $baseMailbox): array
+    {
+        if (str_ends_with($emailLower, '@gmail.com')) {
+            return [$baseMailbox, $this->buildMailboxWithFolder($baseMailbox, '[Gmail]/Spam')];
+        }
+        return [
+            $baseMailbox,
+            $this->buildMailboxWithFolder($baseMailbox, 'Spam'),
+            $this->buildMailboxWithFolder($baseMailbox, 'Junk'),
+        ];
+    }
+
+    private function resolveCentralImapConfig(): array
+    {
+        $mailbox = trim((string)env('CENTRAL_IMAP_MAILBOX', env('IMAP_MAILBOX', '{imap.gmail.com:993/imap/ssl/novalidate-cert}INBOX')));
+        $folders = array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string)env('CENTRAL_IMAP_FOLDERS', 'INBOX,Spam,[Gmail]/Spam,Junk'))
+        )));
+
+        // บังคับเติมโฟลเดอร์ขยะ/สแปมที่พบบ่อย เพื่อกัน config ไม่ครบใน runtime
+        $folders = array_values(array_unique(array_merge(
+            $folders,
+            ['INBOX', 'Spam', '[Gmail]/Spam', 'Junk', 'Junk Email', '[Gmail]/Trash']
+        )));
+
+        if (empty($folders)) {
+            $folders = ['INBOX'];
+        }
+
+        return [
+            'email'     => trim((string)env('CENTRAL_IMAP_EMAIL', env('IMAP_USER', ''))),
+            'password'  => trim((string)env('CENTRAL_IMAP_PASSWORD', env('IMAP_PASSWORD', ''))),
+            'mailbox'   => $mailbox,
+            'mailboxes' => array_map(fn(string $f) => $this->buildMailboxWithFolder($mailbox, $f), $folders),
+        ];
+    }
+
+
 
     /**
      * Display a listing of the resource.
@@ -241,74 +299,31 @@ class OtpController extends Controller
     public function fetchOtp(Request $request)
     {
         $data = $request->validate([
-            'email' => 'required|email',
-            'service' => 'required|string',
+            'email'        => 'required|email',
+            'service'      => 'required|string',
             'unlock_token' => 'nullable|string',
-            'screen_name' => 'required_without:unlock_token|string|max:50',
-            'screen_code' => 'required_without:unlock_token|string|min:4|max:32',
-            'mailbox' => 'nullable|string',
-            'provider' => 'nullable|in:imap,graph',
-            'access_token' => 'nullable|string',
-            'mail_folder' => 'nullable|string',
+            'screen_name'  => 'required_without:unlock_token|string|max:50',
+            'screen_code'  => 'required_without:unlock_token|string|min:4|max:32',
+            'mailbox'      => 'nullable|string',
         ]);
 
-        $email = (string)$data['email'];
+        $email          = (string)$data['email'];
         $requestedEmail = $email;
-        $service = (string)$data['service'];
-        $unlockToken = trim((string)($data['unlock_token'] ?? ''));
-        $screenName = trim((string)($data['screen_name'] ?? ''));
-        $screenCode = (string)($data['screen_code'] ?? '');
-
-        $providerInput = strtolower(trim((string)($data['provider'] ?? '')));
-        $accessToken = trim((string)($data['access_token'] ?? ''));
-        $mailFolder = (string)($data['mail_folder'] ?? 'inbox');
-
-        $emailLower = strtolower($email);
-        $mailbox = (string)($data['mailbox'] ?? '');
-        if ($mailbox === '') {
-            if (str_ends_with($emailLower, '@gmail.com')) {
-                $mailbox = '{imap.gmail.com:993/imap/ssl/novalidate-cert}INBOX';
-            } elseif (
-                str_ends_with($emailLower, '@outlook.com') ||
-                str_ends_with($emailLower, '@hotmail.com') ||
-                str_ends_with($emailLower, '@live.com') ||
-                str_ends_with($emailLower, '@msn.com')
-            ) {
-                $mailbox = '{outlook.office365.com:993/imap/ssl/novalidate-cert}INBOX';
-            } else {
-                $mailbox = (string)env('IMAP_MAILBOX', '{outlook.office365.com:993/imap/ssl/novalidate-cert}INBOX');
-            }
-        }
-
-        // ดึง OTP row ที่ยืนยันแล้วและยังไม่หมดอายุ
-        $otpSelectColumns = [
-            'id',
-            'is_verified',
-            'password',
-            'mail_type',
-            'screen_locks',
-            'refresh_token',
-        ];
-
-        if (Schema::hasColumns('otp', ['oauth_client_id', 'oauth_client_secret', 'oauth_tenant_id'])) {
-            $otpSelectColumns = array_merge($otpSelectColumns, [
-                'oauth_client_id',
-                'oauth_client_secret',
-                'oauth_tenant_id',
-            ]);
-        }
+        $emailLower     = strtolower($email);
+        $service        = (string)$data['service'];
+        $unlockToken    = trim((string)($data['unlock_token'] ?? ''));
+        $screenName     = trim((string)($data['screen_name'] ?? ''));
+        $screenCode     = (string)($data['screen_code'] ?? '');
 
         $otpRow = Otp::where('email', $email)
             ->where('service', $service)
             ->where('is_verified', 1)
             ->where('expires_at', '>', now())
             ->latest('created_at')
-            ->first($otpSelectColumns);
+            ->first(['id', 'password', 'screen_locks']);
 
         if (!$otpRow) {
-            return response()->json([
-                'message' => 'ไม่พบการตั้งค่าอีเมลหรือสิทธิ์หมดอายุ'
-            ], 404);
+            return response()->json(['message' => 'ไม่พบการตั้งค่าอีเมลหรือสิทธิ์หมดอายุ'], 404);
         }
 
         if ($unlockToken !== '') {
@@ -326,232 +341,99 @@ class OtpController extends Controller
             }
         }
 
-        $mailType = strtolower(trim((string)($otpRow->mail_type ?? '')));
-        $graphMailTypes = ['hotmail', 'outlook', 'live', 'msn', 'microsoft', 'office365', 'graph'];
-        $isHotmailDomain = str_ends_with($emailLower, '@hotmail.com');
-        $isMicrosoftDomain =
-            str_ends_with($emailLower, '@outlook.com') ||
-            str_ends_with($emailLower, '@hotmail.com') ||
-            str_ends_with($emailLower, '@live.com') ||
-            str_ends_with($emailLower, '@msn.com');
-
-        $useCentralMailboxForMicrosoft = $isHotmailDomain
-            && filter_var(env('HOTMAIL_USE_CENTRAL_MAILBOX', true), FILTER_VALIDATE_BOOL);
-
-        $centralImapEmail = trim((string)env('CENTRAL_IMAP_EMAIL', env('IMAP_USER', '')));
-        $centralImapPassword = trim((string)env('CENTRAL_IMAP_PASSWORD', env('IMAP_PASSWORD', '')));
-        $centralImapMailbox = trim((string)env('CENTRAL_IMAP_MAILBOX', env('IMAP_MAILBOX', '{imap.gmail.com:993/imap/ssl/novalidate-cert}INBOX')));
-        $centralImapFolders = array_values(array_filter(array_map(
-            'trim',
-            explode(',', (string)env('CENTRAL_IMAP_FOLDERS', 'INBOX,Spam,[Gmail]/Spam,Junk'))
-        )));
-        if (empty($centralImapFolders)) {
-            $centralImapFolders = ['INBOX'];
-        }
-        $centralImapMailboxes = array_map(
-            fn(string $folder) => $this->buildMailboxWithFolder($centralImapMailbox, $folder),
-            $centralImapFolders
-        );
-
-        $provider = $providerInput !== ''
-            ? $providerInput
-            : ($isMicrosoftDomain || in_array($mailType, $graphMailTypes, true) ? 'graph' : 'imap');
-
-        if ($useCentralMailboxForMicrosoft) {
-            $provider = 'imap';
-            $mailbox = $centralImapMailboxes[0] ?? $centralImapMailbox;
-        }
-
-        $verify = $otpRow->is_verified ?? false;
-        $password = $otpRow->password ?? null;
-
-        if ($useCentralMailboxForMicrosoft) {
-            if ($centralImapEmail === '' || $centralImapPassword === '') {
-                return response()->json([
-                    'message' => 'ยังไม่ได้ตั้งค่าเมลกลางสำหรับ Hotmail/Outlook (CENTRAL_IMAP_EMAIL/CENTRAL_IMAP_PASSWORD)'
-                ], 500);
-            }
-            $email = $centralImapEmail;
-            $password = $centralImapPassword;
-        }
-
-        if ($provider === 'graph' && $accessToken === '') {
-            $accessToken = trim((string)($otpRow->password ?? ''));
-        }
-        $storedRefreshToken = trim((string)($otpRow->refresh_token ?? ''));
-        $oauthClientId = trim((string)($otpRow->oauth_client_id ?? ''));
-        $oauthClientSecret = trim((string)($otpRow->oauth_client_secret ?? ''));
-        $oauthTenantId = trim((string)($otpRow->oauth_tenant_id ?? ''));
-        if (!$verify) {
-            return response()->json([
-                'message' => 'Email นี้หมดอายุแล้ว กรุณาติดต่อผู้ดูแลระบบเพื่อขออนุญาตใช้งานใหม่'
-            ], 403);
-        }
-        if ($provider === 'imap' && !$password) {
-            return response()->json([
-                'message' => 'ไม่พบรหัสผ่านสำหรับ email นี้ กรุณาติดต่อผู้ดูแลระบบเพื่อขออนุญาตใช้งานใหม่'
-            ], 404);
-        }
-        if ($provider === 'graph' && $accessToken === '' && $storedRefreshToken === '') {
-            return response()->json([
-                'message' => 'ไม่พบ access token/refresh token สำหรับ provider เป็น graph (โปรดบันทึก token อย่างน้อยหนึ่งค่าในฐานข้อมูลหรือส่ง access_token มาในคำขอ)'
-            ], 422);
-        }
+        $usingCentralMailbox = false;
 
         try {
-            if ($provider === 'graph') {
-                $graphService = new GraphMailService();
+            $imapService = new ImapOtpService();
 
-                // โหมดง่าย: ถ้ามี refresh_token ให้ต่ออายุ access token ก่อนทุกครั้ง
-                if ($storedRefreshToken !== '') {
-                    $refreshed = $graphService->refreshAccessToken(
-                        $storedRefreshToken,
-                        $oauthClientId !== '' ? $oauthClientId : null,
-                        $oauthClientSecret !== '' ? $oauthClientSecret : null,
-                        $oauthTenantId !== '' ? $oauthTenantId : null
-                    );
-                    if (!isset($refreshed['error_type'])) {
-                        $accessToken = $refreshed['access_token'];
-                        Otp::where('id', $otpRow->id)->update([
-                            'password'      => $accessToken,
-                            'refresh_token' => $refreshed['refresh_token'],
-                        ]);
-                    } elseif (($refreshed['error_type'] ?? '') === 'refresh_token_expired') {
-                        return response()->json([
-                            'message' => 'Refresh token หมดอายุหรือถูกยกเลิก กรุณาล็อกอิน Microsoft ใหม่และอัปเดต token ในระบบ',
-                            'error_type' => 'refresh_token_expired',
-                        ], 401);
-                    } elseif (($refreshed['error_type'] ?? '') === 'config_missing') {
-                        return response()->json([
-                            'message' => $refreshed['error_message'],
-                            'error_type' => 'config_missing',
-                        ], 500);
-                    }
+            if ($this->isMicrosoftDomain($emailLower)) {
+                // Microsoft domains ทั้งหมด → forward มาที่ central IMAP
+                $central = $this->resolveCentralImapConfig();
+                if ($central['email'] === '' || $central['password'] === '') {
+                    return response()->json([
+                        'message' => 'ยังไม่ได้ตั้งค่าเมลกลาง (CENTRAL_IMAP_EMAIL/CENTRAL_IMAP_PASSWORD)'
+                    ], 500);
                 }
 
-                $result = $graphService->fetchLatestOtpFromInbox($accessToken, $service, $mailFolder);
+                $usingCentralMailbox = true;
 
-                // ถ้า auth_failed และมี refresh_token ให้ลอง refresh แล้วยิงซ้ำ
-                if (
-                    is_array($result) &&
-                    ($result['error_type'] ?? null) === 'auth_failed' &&
-                    $storedRefreshToken !== ''
-                ) {
-                    $refreshed = $graphService->refreshAccessToken(
-                        $storedRefreshToken,
-                        $oauthClientId !== '' ? $oauthClientId : null,
-                        $oauthClientSecret !== '' ? $oauthClientSecret : null,
-                        $oauthTenantId !== '' ? $oauthTenantId : null
-                    );
-
-                    if (!isset($refreshed['error_type'])) {
-                        $newAccessToken     = $refreshed['access_token'];
-                        $newRefreshToken    = $refreshed['refresh_token'];
-
-                        // บันทึก token ใหม่กลับเข้า DB ทันที
-                        Otp::where('id', $otpRow->id)->update([
-                            'password'      => $newAccessToken,
-                            'refresh_token' => $newRefreshToken,
-                        ]);
-
-                        // ยิงซ้ำด้วย access_token ใหม่
-                        $result = $graphService->fetchLatestOtpFromInbox($newAccessToken, $service, $mailFolder);
-                        $accessToken = $newAccessToken;
-                    } elseif (($refreshed['error_type'] ?? '') === 'refresh_token_expired') {
-                        return response()->json([
-                            'message' => 'Refresh token หมดอายุหรือถูกยกเลิก กรุณาล็อกอิน Microsoft ใหม่และอัปเดต token ในระบบ',
-                            'error_type' => 'refresh_token_expired',
-                        ], 401);
-                    }
-                }
+                $result = $imapService->fetchLatestOtpFromMailboxes(
+                    $central['email'],
+                    $central['password'],
+                    $service,
+                    $central['mailboxes'],
+                    $requestedEmail
+                );
             } else {
-                $imapService = new ImapOtpService();
-                if ($useCentralMailboxForMicrosoft) {
-                    $result = $imapService->fetchLatestOtpFromMailboxes(
-                        $email,
-                        $password,
-                        $service,
-                        $centralImapMailboxes,
-                        $requestedEmail,
-                        true
-                    );
-                } else {
-                    $result = $imapService->fetchLatestOtpFromInbox(
-                        $email,
-                        $password,
-                        $service,
-                        $mailbox,
-                        null
-                    );
+                $password = $otpRow->password;
+                if (!$password) {
+                    return response()->json([
+                        'message' => 'ไม่พบรหัสผ่านสำหรับ email นี้ กรุณาติดต่อผู้ดูแลระบบเพื่อขออนุญาตใช้งานใหม่'
+                    ], 404);
                 }
+
+                $mailbox   = (string)($data['mailbox'] ?? '') ?: $this->resolveDefaultMailbox($emailLower);
+                $mailboxes = $this->buildImapMailboxesForEmail($emailLower, $mailbox);
+
+                $result = $imapService->fetchLatestOtpFromMailboxes(
+                    $email,
+                    $password,
+                    $service,
+                    $mailboxes,
+                    null
+                );
             }
 
             if (empty($result) || !is_array($result)) {
-                return response()->json([
-                    'message' => 'ไม่พบอีเมลในกล่องขาเข้า'
-                ], 404);
+                return response()->json(['message' => 'ไม่พบอีเมลในกล่องขาเข้า'], 404);
             }
 
-            // กรณี error เฉพาะทาง
             if (!empty($result['error_type'])) {
-                if ($result['error_type'] === 'auth_failed') {
+                $errType = $result['error_type'];
+                $errorMap = [
+                    'auth_failed'      => ['message' => $usingCentralMailbox
+                        ? 'เข้าสู่ระบบ IMAP ของเมลกลางไม่สำเร็จ กรุณาตรวจสอบ CENTRAL_IMAP_EMAIL/CENTRAL_IMAP_PASSWORD และสิทธิ์ IMAP ของเมลกลาง'
+                        : 'เข้าสู่ระบบ IMAP ไม่สำเร็จ กรุณาตรวจสอบ App Password หรือการเปิดใช้ IMAP ของอีเมล', 'status' => 401],
+                    'imap_unavailable' => ['message' => 'เซิร์ฟเวอร์อีเมลไม่พร้อมใช้งานหรือปิดให้บริการ', 'status' => 503],
+                ];
+
+                if (isset($errorMap[$errType])) {
                     return response()->json([
-                        'message' => $provider === 'graph'
-                            ? 'เข้าสู่ระบบ Microsoft Graph ไม่สำเร็จ กรุณาตรวจสอบ Access Token'
-                            : 'เข้าสู่ระบบ IMAP ไม่สำเร็จ กรุณาตรวจสอบ App Password หรือการเปิดใช้ IMAP ของอีเมล',
-                        'error_type' => 'auth_failed',
-                        'detail' => $result['error_message'] ?? null,
-                    ], 401);
-                }
-                if ($result['error_type'] === 'imap_unavailable') {
-                    return response()->json([
-                        'message' => 'เซิร์ฟเวอร์อีเมลไม่พร้อมใช้งานหรือปิดให้บริการ',
-                        'error_type' => 'imap_unavailable',
-                        'detail' => $result['error_message'] ?? null,
-                    ], 503);
-                }
-                if ($result['error_type'] === 'graph_unavailable') {
-                    return response()->json([
-                        'message' => 'Microsoft Graph API ไม่พร้อมใช้งานหรือปฏิเสธคำขอ',
-                        'error_type' => 'graph_unavailable',
-                        'detail' => $result['error_message'] ?? null,
-                    ], 503);
+                        'message'    => $errorMap[$errType]['message'],
+                        'error_type' => $errType,
+                        'detail'     => $result['error_message'] ?? null,
+                    ], $errorMap[$errType]['status']);
                 }
 
                 return response()->json([
-                    'message' => $result['error_message'] ?? 'เกิดข้อผิดพลาดในการเชื่อมต่ออีเมล',
-                    'error_type' => $result['error_type'],
+                    'message'    => $result['error_message'] ?? 'เกิดข้อผิดพลาดในการเชื่อมต่ออีเมล',
+                    'error_type' => $errType,
                 ], 500);
             }
 
-            // สำเร็จ
             if (!empty($result['otp'])) {
                 return response()->json($result);
             }
 
-            // ไม่พบ OTP แต่มี debug/error
             return response()->json([
-                'message' => 'ไม่พบ OTP ในอีเมลล่าสุดที่เกี่ยวข้องกับบริการนี้',
+                'message'        => 'ไม่พบ OTP ในอีเมลล่าสุดที่เกี่ยวข้องกับบริการนี้',
                 'debug_subjects' => $result['debug_subjects'] ?? [],
-                'error_message' => $result['error_message'] ?? null,
+                'error_message'  => $result['error_message'] ?? null,
             ], 404);
         } catch (\Exception $e) {
             $msg = $e->getMessage();
             if (stripos($msg, 'Authentication failed') !== false || stripos($msg, 'Invalid credentials') !== false) {
                 return response()->json([
-                    'message' => 'รหัสผ่านอีเมลไม่ถูกต้อง',
-                    'error_type' => 'auth_failed',
+                    'message' => $usingCentralMailbox
+                        ? 'ยืนยันตัวตน IMAP ของเมลกลางไม่สำเร็จ กรุณาตรวจสอบ CENTRAL_IMAP_EMAIL/CENTRAL_IMAP_PASSWORD'
+                        : 'รหัสผ่านอีเมลไม่ถูกต้อง',
+                    'error_type' => 'auth_failed'
                 ], 401);
             }
             if (stripos($msg, 'Connection refused') !== false || stripos($msg, 'Cannot connect') !== false || stripos($msg, 'IMAP server closed') !== false) {
-                return response()->json([
-                    'message' => 'เซิร์ฟเวอร์อีเมลไม่พร้อมใช้งานหรือปิดให้บริการ',
-                    'error_type' => 'imap_unavailable',
-                ], 503);
+                return response()->json(['message' => 'เซิร์ฟเวอร์อีเมลไม่พร้อมใช้งานหรือปิดให้บริการ', 'error_type' => 'imap_unavailable'], 503);
             }
-            return response()->json([
-                'message' => 'เกิดข้อผิดพลาดในการค้นหา OTP: ' . $msg
-            ], 500);
+            return response()->json(['message' => 'เกิดข้อผิดพลาดในการค้นหา OTP: ' . $msg], 500);
         }
     }
 

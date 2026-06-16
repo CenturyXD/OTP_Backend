@@ -59,8 +59,10 @@ class ImapOtpService
         $bestTimestamp = 0;
         $lastError = null;
         $combinedDebugSubjects = [];
+        $checkedMailboxes = [];
 
         foreach ($mailboxes as $mailbox) {
+            $checkedMailboxes[] = (string)$mailbox;
             $result = $this->fetchLatestOtpFromInbox($email, $password, $service, $mailbox, $forwardedTargetEmail);
 
             if (!is_array($result)) {
@@ -92,16 +94,20 @@ class ImapOtpService
                 $bestResult['debug_subjects'] = $combinedDebugSubjects;
             }
 
+            $bestResult['checked_mailboxes'] = $checkedMailboxes;
+
             return $bestResult;
         }
 
         if ($lastError !== null) {
+            $lastError['checked_mailboxes'] = $checkedMailboxes;
             return $lastError;
         }
 
         return [
             'otp' => null,
             'debug_subjects' => $combinedDebugSubjects,
+            'checked_mailboxes' => $checkedMailboxes,
         ];
     }
 
@@ -142,45 +148,54 @@ class ImapOtpService
             imap_close($inbox);
             return null;
         }
+
+        // Config
         $serviceLower = mb_strtolower($service);
-        $debugSubjects = [];
-        $maxSearch = 10; // จำกัดวนหา 10 ฉบับล่าสุด
+        $maxSearch = (int)env('IMAP_MAX_SEARCH', 30);
+        $maxSearch = max(10, min($maxSearch, 100));
         $start = max($numMessages - $maxSearch + 1, 1);
+        $debugSubjects = [];
+
+        // Search จากเมลล่าสุดไปหาเก่า
         for ($i = $numMessages; $i >= $start; $i--) {
             $overview = imap_fetch_overview($inbox, $i, 0);
             if (empty($overview)) continue;
+
             $subject = $this->decodeMimeStr($overview[0]->subject ?? '');
             $from = $this->decodeMimeStr($overview[0]->from ?? '');
-            $debugSubjects[] = [
-                'subject' => $subject,
-                'from' => $from
-            ];
             $date = $overview[0]->date ?? '';
+
+            // Quick check 1: Forwarded target (check FROM only, no body parsing yet)
+            if (!$this->isFromTargetEmail($from, $forwardedTargetEmail)) {
+                $debugSubjects[] = [
+                    'subject' => $subject,
+                    'from' => $from,
+                    'date' => $date,
+                    'mailbox' => $mailbox,
+                    'forwarded_matched' => false,
+                ];
+                continue;
+            }
+
+            // Parse body เฉพาะเมลที่ผ่าน target-email check แล้ว
             $structure = imap_fetchstructure($inbox, $i);
             $parts = $this->getAllTextParts($inbox, $i, $structure);
-            $plainText = '';
-            $htmlText = '';
-            foreach ($parts as $part) {
-                if ($part['subtype'] === 'plain') {
-                    $plainText .= "\n" . $part['content'];
-                } elseif ($part['subtype'] === 'html') {
-                    $htmlText .= "\n" . strip_tags($part['content']);
-                }
-            }
-            $body = trim($plainText) !== '' ? trim($plainText) : trim($htmlText);
+            $body = $this->extractBodyFromParts($parts);
 
-            // กรณีดึงจากเมลกลาง: ต้องเป็นเมลที่มีหลักฐานว่า forward มาจาก target email ที่ร้องขอ
-            if ($forwardedTargetEmail !== '') {
-                $searchArea = strtolower($subject . "\n" . $from . "\n" . $body);
-                if (strpos($searchArea, $forwardedTargetEmail) === false) {
-                    continue;
-                }
+            // Full service check on body
+            if (!$this->isServiceMatch($subject, $from, $body, $serviceLower)) {
+                $debugSubjects[] = [
+                    'subject' => $subject,
+                    'from' => $from,
+                    'date' => $date,
+                    'mailbox' => $mailbox,
+                    'forwarded_matched' => true,
+                ];
+                continue;
             }
 
+            // Extract OTP
             $otp = $this->extractOtp($body);
-            if (!$otp && $forwardedTargetEmail !== '') {
-                $otp = $this->extractOtpFromRawMessage($inbox, $i);
-            }
             if ($otp) {
                 imap_close($inbox);
                 return [
@@ -191,28 +206,16 @@ class ImapOtpService
                 ];
             }
 
-            $match = false;
-            if ($serviceLower === 'netflix') {
-                // รองรับเมล forward ที่ subject/from เปลี่ยน แต่ body ยังมี netflix
-                $match = (mb_stripos($subject, 'netflix') !== false)
-                    || (mb_stripos($from, 'netflix') !== false)
-                    || (mb_stripos($body, 'netflix') !== false);
-            } elseif ($serviceLower === 'disney+' || $serviceLower === 'disney') {
-                // Disney+ มักอยู่ใน body เมื่อถูก forward
-                $match = (mb_stripos($from, 'disney') !== false)
-                    || (mb_stripos($subject, 'disney') !== false)
-                    || (mb_stripos($body, 'disney') !== false);
-            } else {
-                $match = ($serviceLower && (
-                    mb_stripos($subject, $serviceLower) !== false
-                    || mb_stripos($from, $serviceLower) !== false
-                    || mb_stripos($body, $serviceLower) !== false
-                ));
-            }
-            if (!$match) continue;
+            $debugSubjects[] = [
+                'subject' => $subject,
+                'from' => $from,
+                'date' => $date,
+                'mailbox' => $mailbox,
+                'forwarded_matched' => true,
+            ];
         }
+
         imap_close($inbox);
-        // ส่ง subject+from ทั้งหมดกลับมาด้วยถ้าไม่พบ OTP เพื่อ debug
         return [
             'otp' => null,
             'debug_subjects' => $debugSubjects,
@@ -220,24 +223,90 @@ class ImapOtpService
     }
 
     /**
-     * Fallback สำหรับเมล forward ที่ OTP อาจอยู่ใน source ดิบ
+     * Check if FROM email matches target (quick, no body parsing)
      */
-    private function extractOtpFromRawMessage($inbox, int $msgNumber): ?string
+    private function isFromTargetEmail(string $from, string $forwardedTargetEmail): bool
     {
-        $header = (string)imap_fetchheader($inbox, $msgNumber);
-        $body = (string)imap_body($inbox, $msgNumber);
-        $raw = $this->normalizeBody($header . "\n" . $body);
-
-        $keywordPattern = '(?:otp|one\s*time|verification|verify|security|passcode|pin|code|รหัส|ยืนยัน)';
-
-        if (
-            preg_match('/' . $keywordPattern . '\\D{0,40}(\\d{4,8})/iu', $raw, $matches) ||
-            preg_match('/(\\d{4,8})\\D{0,40}' . $keywordPattern . '/iu', $raw, $matches)
-        ) {
-            return (string)$matches[1];
+        if ($forwardedTargetEmail === '') {
+            return true;
         }
 
-        return null;
+        $fromEmails = $this->extractEmailAddresses($from);
+        return in_array($forwardedTargetEmail, $fromEmails, true);
+    }
+
+    /**
+     * Full service match on subject/from/body (after body parsing)
+     */
+    private function isServiceMatch(string $subject, string $from, string $body, string $serviceLower): bool
+    {
+        if (!$serviceLower) {
+            return true;
+        }
+
+        $subjectLower = mb_strtolower($subject);
+        $fromLower = mb_strtolower($from);
+        $bodyLower = mb_strtolower($body);
+
+        // Special case: Netflix
+        if ($serviceLower === 'netflix') {
+            return mb_stripos($subjectLower, 'netflix') !== false
+                || mb_stripos($fromLower, 'netflix') !== false
+                || mb_stripos($bodyLower, 'netflix') !== false;
+        }
+
+        // Special case: Disney+
+        if ($serviceLower === 'disney+' || $serviceLower === 'disney') {
+            return mb_stripos($fromLower, 'disney') !== false
+                || mb_stripos($subjectLower, 'disney') !== false
+                || mb_stripos($bodyLower, 'disney') !== false;
+        }
+
+        // Default: search in all fields
+        return mb_stripos($subjectLower, $serviceLower) !== false
+            || mb_stripos($fromLower, $serviceLower) !== false
+            || mb_stripos($bodyLower, $serviceLower) !== false;
+    }
+
+    /**
+     * Extract body text from message parts (plain text priority)
+     */
+    private function extractBodyFromParts(array $parts): string
+    {
+        $plainText = '';
+        $htmlText = '';
+
+        foreach ($parts as $part) {
+            if ($part['subtype'] === 'plain') {
+                $plainText .= "\n" . $part['content'];
+            } elseif ($part['subtype'] === 'html') {
+                $htmlText .= "\n" . strip_tags($part['content']);
+            }
+        }
+
+        return trim($plainText) !== '' ? trim($plainText) : trim($htmlText);
+    }
+
+    /**
+     * ดึง email addresses จาก text
+     * Returns array of lowercase email addresses
+     */
+    private function extractEmailAddresses(string $text): array
+    {
+        $emails = [];
+
+        // Pattern: <email@domain.com> หรือ email@domain.com
+        if (preg_match_all('/[<\s]?([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})[>\s,;]?/i', $text, $matches)) {
+            foreach ($matches[1] as $email) {
+                $email = strtolower(trim($email));
+                if (!empty($email)) {
+                    $emails[] = $email;
+                }
+            }
+        }
+
+        // Remove duplicates
+        return array_values(array_unique($emails));
     }
 
     /**
