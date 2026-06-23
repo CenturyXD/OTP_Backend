@@ -310,6 +310,14 @@ class ImapOtpService
     }
 
     /**
+     * ดึงเลข OTP (4-8 หลัก) จากเนื้อหาอีเมล (public สำหรับ Maily Space / service อื่น)
+     */
+    public function extractOtpFromBody(string $body): ?string
+    {
+        return $this->extractOtp($body);
+    }
+
+    /**
      * ดึงเลข OTP (4-8 หลัก) จากเนื้อหาอีเมล
      */
     private function extractOtp($body)

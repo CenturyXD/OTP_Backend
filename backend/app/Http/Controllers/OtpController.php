@@ -6,6 +6,7 @@ use App\Models\Otp;
 use Illuminate\Http\Request;
 use App\Services\GraphMailService;
 use App\Services\ImapOtpService;
+use App\Services\MailySpaceService;
 use App\Http\Requests\PermissionRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -158,7 +159,51 @@ class OtpController extends Controller
         ];
     }
 
+    private function respondWithOtpFetchResult(array $result, bool $usingCentralMailbox = false): \Illuminate\Http\JsonResponse
+    {
+        if (empty($result) || !is_array($result)) {
+            return response()->json(['message' => 'ไม่พบอีเมลในกล่องขาเข้า'], 404);
+        }
 
+        if (!empty($result['error_type'])) {
+            $errType = $result['error_type'];
+            $errorMap = [
+                'auth_failed' => [
+                    'message' => ($result['provider'] ?? '') === 'domain'
+                        ? 'Maily Space API key ไม่ถูกต้อง กรุณาตรวจสอบ password (apiKey) ในระบบ'
+                        : ($usingCentralMailbox
+                            ? 'เข้าสู่ระบบ IMAP ของเมลกลางไม่สำเร็จ กรุณาตรวจสอบ CENTRAL_IMAP_EMAIL/CENTRAL_IMAP_PASSWORD และสิทธิ์ IMAP ของเมลกลาง'
+                            : 'เข้าสู่ระบบ IMAP ไม่สำเร็จ กรุณาตรวจสอบ App Password หรือการเปิดใช้ IMAP ของอีเมล'),
+                    'status' => 401,
+                ],
+                'imap_unavailable' => ['message' => 'เซิร์ฟเวอร์อีเมลไม่พร้อมใช้งานหรือปิดให้บริการ', 'status' => 503],
+                'maily_unavailable' => ['message' => 'Maily Space API ไม่พร้อมใช้งาน', 'status' => 503],
+            ];
+
+            if (isset($errorMap[$errType])) {
+                return response()->json([
+                    'message'    => $errorMap[$errType]['message'],
+                    'error_type' => $errType,
+                    'detail'     => $result['error_message'] ?? null,
+                ], $errorMap[$errType]['status']);
+            }
+
+            return response()->json([
+                'message'    => $result['error_message'] ?? 'เกิดข้อผิดพลาดในการเชื่อมต่ออีเมล',
+                'error_type' => $errType,
+            ], 500);
+        }
+
+        if (!empty($result['otp'])) {
+            return response()->json($result);
+        }
+
+        return response()->json([
+            'message'        => 'ไม่พบ OTP ในอีเมลล่าสุดที่เกี่ยวข้องกับบริการนี้',
+            'debug_subjects' => $result['debug_subjects'] ?? [],
+            'error_message'  => $result['error_message'] ?? null,
+        ], 404);
+    }
 
     /**
      * Display a listing of the resource.
@@ -315,12 +360,12 @@ class OtpController extends Controller
         $screenName     = trim((string)($data['screen_name'] ?? ''));
         $screenCode     = (string)($data['screen_code'] ?? '');
 
-        $otpRow = Otp::where('email', $email)
+        $otpRow = Otp::whereRaw('LOWER(email) = ?', [strtolower($email)])
             ->where('service', $service)
             ->where('is_verified', 1)
             ->where('expires_at', '>', now())
             ->latest('created_at')
-            ->first(['id', 'password', 'screen_locks']);
+            ->first(['id', 'password', 'screen_locks', 'mail_type']);
 
         if (!$otpRow) {
             return response()->json(['message' => 'ไม่พบการตั้งค่าอีเมลหรือสิทธิ์หมดอายุ'], 404);
@@ -338,6 +383,31 @@ class OtpController extends Controller
                 return response()->json([
                     'message' => $verifyLock['message'] ?? 'รหัสล็อคจอไม่ถูกต้อง'
                 ], $verifyLock['status'] ?? 403);
+            }
+        }
+
+        $mailType = strtolower(trim((string)($otpRow->mail_type ?? '')));
+
+        if ($mailType === 'domain') {
+            $apiKey = trim((string)($otpRow->password ?? ''));
+            if ($apiKey === '') {
+                return response()->json([
+                    'message' => 'ไม่พบ API key สำหรับ domain email นี้ กรุณาติดต่อผู้ดูแลระบบ'
+                ], 404);
+            }
+
+            try {
+                $mailyService = new MailySpaceService();
+                $result = $mailyService->fetchLatestOtp($apiKey, $email, $service);
+                if (!empty($result['error_type']) && $result['error_type'] === 'auth_failed') {
+                    $result['provider'] = 'domain';
+                }
+
+                return $this->respondWithOtpFetchResult($result);
+            } catch (\Exception $e) {
+                return response()->json([
+                    'message' => 'เกิดข้อผิดพลาดในการค้นหา OTP: ' . $e->getMessage()
+                ], 500);
             }
         }
 
@@ -388,38 +458,7 @@ class OtpController extends Controller
                 return response()->json(['message' => 'ไม่พบอีเมลในกล่องขาเข้า'], 404);
             }
 
-            if (!empty($result['error_type'])) {
-                $errType = $result['error_type'];
-                $errorMap = [
-                    'auth_failed'      => ['message' => $usingCentralMailbox
-                        ? 'เข้าสู่ระบบ IMAP ของเมลกลางไม่สำเร็จ กรุณาตรวจสอบ CENTRAL_IMAP_EMAIL/CENTRAL_IMAP_PASSWORD และสิทธิ์ IMAP ของเมลกลาง'
-                        : 'เข้าสู่ระบบ IMAP ไม่สำเร็จ กรุณาตรวจสอบ App Password หรือการเปิดใช้ IMAP ของอีเมล', 'status' => 401],
-                    'imap_unavailable' => ['message' => 'เซิร์ฟเวอร์อีเมลไม่พร้อมใช้งานหรือปิดให้บริการ', 'status' => 503],
-                ];
-
-                if (isset($errorMap[$errType])) {
-                    return response()->json([
-                        'message'    => $errorMap[$errType]['message'],
-                        'error_type' => $errType,
-                        'detail'     => $result['error_message'] ?? null,
-                    ], $errorMap[$errType]['status']);
-                }
-
-                return response()->json([
-                    'message'    => $result['error_message'] ?? 'เกิดข้อผิดพลาดในการเชื่อมต่ออีเมล',
-                    'error_type' => $errType,
-                ], 500);
-            }
-
-            if (!empty($result['otp'])) {
-                return response()->json($result);
-            }
-
-            return response()->json([
-                'message'        => 'ไม่พบ OTP ในอีเมลล่าสุดที่เกี่ยวข้องกับบริการนี้',
-                'debug_subjects' => $result['debug_subjects'] ?? [],
-                'error_message'  => $result['error_message'] ?? null,
-            ], 404);
+            return $this->respondWithOtpFetchResult($result, $usingCentralMailbox);
         } catch (\Exception $e) {
             $msg = $e->getMessage();
             if (stripos($msg, 'Authentication failed') !== false || stripos($msg, 'Invalid credentials') !== false) {
