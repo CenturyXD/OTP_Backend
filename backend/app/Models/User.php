@@ -34,7 +34,7 @@ class User extends Authenticatable
         'theme[gradient]',
         'start_date',
         'end_date',
-        'services',
+        'service',
     ];
 
     /**
