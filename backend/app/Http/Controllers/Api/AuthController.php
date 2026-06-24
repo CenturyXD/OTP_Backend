@@ -168,6 +168,12 @@ class AuthController extends Controller
                 $user->{'theme[gradient]'} = $gradient;
             }
 
+            if ($request->has('service')) {
+                $user->service = $request->service;
+            }
+
+
+
             $user->save();
 
             DB::commit();
@@ -183,6 +189,7 @@ class AuthController extends Controller
                 'theme[accent]' => $user->{'theme[accent]'} ?? null,
                 'theme[secondary]' => $user->{'theme[secondary]'} ?? null,
                 'theme[gradient]' => $user->{'theme[gradient]'} ?? null,
+                'services' => $user->service,
             ]);
         } catch (Exception $e) {
             DB::rollBack();
