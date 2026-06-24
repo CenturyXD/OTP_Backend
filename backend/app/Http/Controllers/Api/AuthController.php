@@ -169,7 +169,7 @@ class AuthController extends Controller
             }
 
             if ($request->has('services')) {
-                $user->service = $request->service;
+                $user->service = $request->services;
             }
 
             $user->save();
