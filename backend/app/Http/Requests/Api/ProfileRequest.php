@@ -37,7 +37,7 @@ class ProfileRequest extends FormRequest
             'theme[accent]' => 'sometimes|nullable|string|max:255',
             'theme[secondary]' => 'sometimes|nullable|string|max:255',
             'theme[gradient]' => 'sometimes|nullable|string|max:255',
-            'services' => 'sometimes|nullable|string|max:255',
+            'services' => 'sometimes|nullable|max:255',
         ];
     }
 }
