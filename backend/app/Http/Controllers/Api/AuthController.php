@@ -168,7 +168,7 @@ class AuthController extends Controller
                 $user->{'theme[gradient]'} = $gradient;
             }
 
-            if ($request->has('service')) {
+            if ($request->has('services')) {
                 $user->service = $request->service;
             }
 
