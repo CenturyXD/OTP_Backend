@@ -169,7 +169,7 @@ class AuthController extends Controller
             }
 
             if ($request->has('services')) {
-                $user->service = $request->service;
+                $user->services = $request->services;
             }
 
 
@@ -189,7 +189,7 @@ class AuthController extends Controller
                 'theme[accent]' => $user->{'theme[accent]'} ?? null,
                 'theme[secondary]' => $user->{'theme[secondary]'} ?? null,
                 'theme[gradient]' => $user->{'theme[gradient]'} ?? null,
-                'services' => $user->service,
+                'services' => $user->services,
             ]);
         } catch (Exception $e) {
             DB::rollBack();
@@ -239,7 +239,7 @@ class AuthController extends Controller
                 'theme[accent]' => $user->{'theme[accent]'} ?? null,
                 'theme[secondary]' => $user->{'theme[secondary]'} ?? null,
                 'theme[gradient]' => $user->{'theme[gradient]'} ?? null,
-                'services' => $user->service,
+                'services' => $user->services,
             ]);
         } catch (ModelNotFoundException $e) {
             return response()->json([
@@ -268,7 +268,7 @@ class AuthController extends Controller
             'theme[accent]' => $user->{'theme[accent]'} ?? null,
             'theme[secondary]' => $user->{'theme[secondary]'} ?? null,
             'theme[gradient]' => $user->{'theme[gradient]'} ?? null,
-            'services' => $user->service,
+            'services' => $user->services,
         ]);
     }
 }
